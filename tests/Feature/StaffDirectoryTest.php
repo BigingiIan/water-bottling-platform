@@ -25,6 +25,9 @@ class StaffDirectoryTest extends TestCase
             ModuleSeeder::class,
             RoleModulePermissionSeeder::class,
         ]);
+
+        $administrator = Role::query()->where('slug', 'administrator')->firstOrFail();
+        $this->actingAs(User::factory()->create(['role_id' => $administrator->id]));
     }
 
     public function test_directory_filters_real_users_by_search_role_and_status(): void
@@ -102,7 +105,11 @@ class StaffDirectoryTest extends TestCase
 
     public function test_authenticated_web_requests_update_last_active_at(): void
     {
-        $user = User::factory()->create(['last_active_at' => null]);
+        $administrator = Role::query()->where('slug', 'administrator')->firstOrFail();
+        $user = User::factory()->create([
+            'last_active_at' => null,
+            'role_id' => $administrator->id,
+        ]);
 
         $this->actingAs($user)->get('/staff')->assertOk();
 
@@ -116,5 +123,13 @@ class StaffDirectoryTest extends TestCase
         $response->assertOk()
             ->assertSee('Staff Directory')
             ->assertSee('wire:id', false);
+    }
+
+    public function test_users_without_users_and_roles_access_are_forbidden_from_directory(): void
+    {
+        $productionStaff = Role::query()->where('slug', 'production-staff')->firstOrFail();
+        $this->actingAs(User::factory()->create(['role_id' => $productionStaff->id]));
+
+        $this->get('/staff')->assertForbidden();
     }
 }

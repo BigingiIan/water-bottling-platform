@@ -4,6 +4,8 @@ namespace App\Livewire;
 
 use App\Models\Module;
 use App\Models\Role;
+use App\Models\User;
+use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -18,6 +20,11 @@ class RolePermissionMatrix extends Component
 
     public function cyclePermission(int $roleId, int $moduleId): void
     {
+        $user = auth()->user();
+
+        abort_unless($user instanceof User, 403);
+        app(ModuleAccess::class)->authorize($user, 'users-roles', write: true);
+
         Validator::make([
             'role_id' => $roleId,
             'module_id' => $moduleId,
@@ -55,6 +62,11 @@ class RolePermissionMatrix extends Component
 
     public function render(): View
     {
+        $user = auth()->user();
+
+        abort_unless($user instanceof User, 403);
+        app(ModuleAccess::class)->authorize($user, 'users-roles');
+
         return view('livewire.role-permission-matrix', [
             'modules' => Module::query()->with('roles')->orderBy('name')->get(),
             'roles' => Role::query()->orderBy('name')->get(),

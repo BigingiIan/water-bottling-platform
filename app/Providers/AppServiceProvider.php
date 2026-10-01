@@ -2,7 +2,12 @@
 
 namespace App\Providers;
 
+use App\Models\User;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\View\View as ViewInstance;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -19,6 +24,39 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        View::composer('components.app-layout', function (ViewInstance $view): void {
+            $user = Auth::user();
+            $isImpersonating = session()->has('impersonator_id');
+            $impersonator = $isImpersonating
+                ? User::query()->find(session('impersonator_id'))
+                : null;
+            $canImpersonate = ! $isImpersonating
+                && $user?->status === 'active'
+                && $user?->role?->slug === 'administrator';
+            $impersonationUsers = $canImpersonate
+                ? User::query()
+                    ->with('role')
+                    ->where('status', 'active')
+                    ->where('id', '!=', $user->getKey())
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'email', 'role_id'])
+                : collect();
+            $accessibleModuleSlugs = $user?->role_id
+                ? DB::table('role_module_permissions')
+                    ->join('modules', 'modules.id', '=', 'role_module_permissions.module_id')
+                    ->where('role_module_permissions.role_id', $user->role_id)
+                    ->whereIn('role_module_permissions.access_level', ['view', 'full'])
+                    ->pluck('modules.slug')
+                    ->all()
+                : [];
+
+            $view->with(compact(
+                'accessibleModuleSlugs',
+                'canImpersonate',
+                'impersonationUsers',
+                'impersonator',
+                'isImpersonating',
+            ));
+        });
     }
 }

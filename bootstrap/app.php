@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureModuleAccess;
 use App\Http\Middleware\UpdateLastActiveAt;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -13,6 +14,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->alias([
+            'module.access' => EnsureModuleAccess::class,
+        ]);
         $middleware->appendToGroup('web', UpdateLastActiveAt::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

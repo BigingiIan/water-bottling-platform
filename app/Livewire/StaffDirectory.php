@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\Module;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Layout;
@@ -46,6 +47,11 @@ class StaffDirectory extends Component
 
     public function render(): View
     {
+        $user = auth()->user();
+
+        abort_unless($user instanceof User, 403);
+        app(ModuleAccess::class)->authorize($user, 'users-roles');
+
         $users = User::query()
             ->with(['role.modules'])
             ->when($this->search !== '', function (Builder $query): void {
