@@ -4,6 +4,32 @@
 @source '../../storage/framework/views/*.php';
 
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
-        'Segoe UI Symbol', 'Noto Color Emoji';
+    --color-navy-950: #0b1220;
+    --color-navy-900: #0f1b2e;
+    --color-navy-800: #16263d;
+    --color-navy-700: #1e3350;
+    --color-navy-600: #2a456b;
+    --color-blue-600: #2563eb;
+    --color-blue-500: #3b82f6;
+    --color-blue-50: #eff6ff;
+    --color-teal-500: #14b8a6;
+    --color-teal-50: #f0fdfa;
+    --color-green-500: #16a34a;
+    --color-green-50: #f0fdf4;
+    --color-amber-500: #d97706;
+    --color-amber-50: #fffbeb;
+    --color-red-500: #dc2626;
+    --color-red-50: #fef2f2;
+    --color-gray-50: #f8fafc;
+    --color-gray-100: #f1f5f9;
+    --color-gray-200: #e2e8f0;
+    --color-gray-300: #cbd5e1;
+    --color-gray-400: #94a3b8;
+    --color-gray-500: #64748b;
+    --color-gray-600: #475569;
+    --color-gray-700: #334155;
+    --color-gray-800: #1e293b;
+    --color-gray-900: #0f172a;
+    --radius-md: 8px;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }

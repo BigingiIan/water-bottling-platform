@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AquaOps — Error States</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy-950: #0b1220;
+    --navy-900: #0f1b2e;
+    --navy-700: #1e3350;
+    --blue-600: #2563eb;
+    --blue-500: #3b82f6;
+    --blue-50: #eff6ff;
+    --teal-500: #14b8a6;
+    --amber-500: #d97706;
+    --amber-50: #fffbeb;
+    --red-500: #dc2626;
+    --red-50: #fef2f2;
+    --gray-50: #f8fafc;
+    --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;
+    --gray-300: #cbd5e1;
+    --gray-400: #94a3b8;
+    --gray-500: #64748b;
+    --gray-600: #475569;
+    --gray-700: #334155;
+    --gray-800: #1e293b;
+    --gray-900: #0f172a;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--gray-50);
+    color: var(--gray-800);
+  }
+
+  .intro {
+    max-width: 920px; margin: 0 auto; padding: 40px 24px 10px 24px;
+  }
+  .intro h1 { font-size: 20px; font-weight: 800; color: var(--gray-900); margin-bottom: 6px; }
+  .intro p { font-size: 13.5px; color: var(--gray-500); line-height: 1.6; }
+
+  .screens { display: flex; flex-direction: column; gap: 36px; max-width: 920px; margin: 30px auto 60px auto; padding: 0 24px; }
+  .screen-label {
+    font-size: 11.5px; font-weight: 700; color: var(--gray-500); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;
+  }
+  .screen-label .tag {
+    font-size: 10px; padding: 2px 8px; border-radius: 4px; font-weight: 700; letter-spacing: 0.3px;
+  }
+  .tag-403 { background: var(--amber-50); color: #b45309; }
+  .tag-404 { background: var(--blue-50); color: #1d4ed8; }
+  .tag-500 { background: var(--red-50); color: #b91c1c; }
+
+  .frame {
+    background: #fff; border: 1px solid var(--gray-200); border-radius: 10px;
+    overflow: hidden; box-shadow: 0 1px 2px rgba(15,23,42,0.04);
+  }
+  .frame-topbar {
+    height: 44px; background: var(--navy-950); display: flex; align-items: center; gap: 7px; padding: 0 14px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; }
+
+  .error-stage {
+    min-height: 420px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 48px 24px;
+    position: relative;
+    background:
+      radial-gradient(circle at 20% 20%, rgba(59,130,246,0.04), transparent 40%),
+      radial-gradient(circle at 85% 75%, rgba(20,184,166,0.04), transparent 40%),
+      #fff;
+  }
+
+  .error-card { max-width: 440px; text-align: center; }
+
+  .error-badge {
+    width: 64px; height: 64px; border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; margin: 0 auto 22px auto;
+  }
+  .badge-amber { background: linear-gradient(135deg, #fef3c7, #fde68a); }
+  .badge-blue { background: linear-gradient(135deg, #dbeafe, #bfdbfe); }
+  .badge-red { background: linear-gradient(135deg, #fee2e2, #fecaca); }
+
+  .error-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; font-weight: 600; letter-spacing: 1.5px;
+    color: var(--gray-400); text-transform: uppercase; margin-bottom: 10px;
+  }
+  .error-title { font-size: 21px; font-weight: 800; color: var(--gray-900); margin-bottom: 10px; letter-spacing: -0.2px; }
+  .error-desc { font-size: 13.5px; color: var(--gray-500); line-height: 1.6; margin-bottom: 22px; }
+  .error-desc b { color: var(--gray-700); font-weight: 600; }
+
+  .module-chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: var(--gray-100); border: 1px solid var(--gray-200); border-radius: 20px;
+    padding: 6px 14px; font-size: 12px; font-weight: 600; color: var(--gray-600);
+    margin-bottom: 24px;
+  }
+  .module-chip .req-icon { font-size: 11px; }
+
+  .error-actions { display: flex; gap: 10px; justify-content: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 13px; font-weight: 600;
+    padding: 10px 18px; border-radius: 7px;
+    border: 1px solid transparent; cursor: pointer; text-decoration: none;
+  }
+  .btn-primary { background: var(--blue-600); color: #fff; }
+  .btn-secondary { background: #fff; color: var(--gray-700); border-color: var(--gray-300); }
+
+  .error-meta {
+    margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--gray-100);
+    display: flex; justify-content: center; gap: 22px;
+    font-size: 11px; color: var(--gray-400); font-family: 'JetBrains Mono', monospace;
+  }
+
+  .help-link { margin-top: 16px; font-size: 12px; color: var(--gray-400); }
+  .help-link a { color: var(--blue-600); text-decoration: none; font-weight: 600; }
+
+  /* subtle background pattern for 404 */
+  .dots-pattern {
+    position: absolute; inset: 0; opacity: 0.4; pointer-events: none;
+    background-image: radial-gradient(var(--gray-200) 1px, transparent 1px);
+    background-size: 22px 22px;
+    mask-image: radial-gradient(circle at center, black, transparent 70%);
+  }
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>AquaOps — Error State Designs</h1>
+  <p>Branded replacements for Laravel's default error pages, matching the operations console visual language. Each explains <b>what happened</b> and <b>what to do next</b> without exposing route internals, stack traces, or confirming whether a resource exists beyond what the user is told.</p>
+</div>
+
+<div class="screens">
+
+  <!-- ============ 403 — Access Denied (none) ============ -->
+  <div>
+    <div class="screen-label"><span class="tag tag-403">403</span> Access Denied — role has "none" on this module</div>
+    <div class="frame">
+      <div class="frame-topbar">
+        <div class="dot" style="background:#ff5f57"></div>
+        <div class="dot" style="background:#febc2e"></div>
+        <div class="dot" style="background:#28c840"></div>
+      </div>
+      <div class="error-stage">
+        <div class="error-card">
+          <div class="error-badge badge-amber">🔒</div>
+          <div class="error-code">Error 403</div>
+          <div class="error-title">You don't have access to this</div>
+          <div class="error-desc">
+            Your current role doesn't include permission for this area. If you believe this is a mistake, reach out to your system administrator to review your access.
+          </div>
+          <div class="module-chip"><span class="req-icon">▦</span> Inventory module &nbsp;·&nbsp; role: Maintenance Staff</div>
+          <div class="error-actions">
+            <a class="btn btn-primary" href="#">← Back to Dashboard</a>
+            <a class="btn btn-secondary" href="#">Request Access</a>
+          </div>
+          <div class="error-meta">
+            <span>REF: 8F2A-91C</span>
+            <span>01 Oct 2026, 14:22</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 403 — Read-only (view, write attempted) ============ -->
+  <div>
+    <div class="screen-label"><span class="tag tag-403">403</span> Write Blocked — role has "view" only</div>
+    <div class="frame">
+      <div class="frame-topbar">
+        <div class="dot" style="background:#ff5f57"></div>
+        <div class="dot" style="background:#febc2e"></div>
+        <div class="dot" style="background:#28c840"></div>
+      </div>
+      <div class="error-stage">
+        <div class="error-card">
+          <div class="error-badge badge-amber">✎</div>
+          <div class="error-code">Error 403</div>
+          <div class="error-title">This action needs full access</div>
+          <div class="error-desc">
+            You can view this module, but your role doesn't allow making changes here. Editing is restricted to roles with full access.
+          </div>
+          <div class="module-chip"><span class="req-icon">🛡</span> Users &amp; Roles &nbsp;·&nbsp; your access: View only</div>
+          <div class="error-actions">
+            <a class="btn btn-primary" href="#">← Back to Users &amp; Roles</a>
+            <a class="btn btn-secondary" href="#">Request Access</a>
+          </div>
+          <div class="error-meta">
+            <span>REF: 3D91-7B4</span>
+            <span>01 Oct 2026, 14:25</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 404 — Not Found ============ -->
+  <div>
+    <div class="screen-label"><span class="tag tag-404">404</span> Page Not Found</div>
+    <div class="frame">
+      <div class="frame-topbar">
+        <div class="dot" style="background:#ff5f57"></div>
+        <div class="dot" style="background:#febc2e"></div>
+        <div class="dot" style="background:#28c840"></div>
+      </div>
+      <div class="error-stage">
+        <div class="dots-pattern"></div>
+        <div class="error-card" style="position:relative;">
+          <div class="error-badge badge-blue">🧭</div>
+          <div class="error-code">Error 404</div>
+          <div class="error-title">This page doesn't exist</div>
+          <div class="error-desc">
+            The page you're looking for may have been moved, renamed, or never existed. Double-check the link, or head back to a page you know.
+          </div>
+          <div class="error-actions">
+            <a class="btn btn-primary" href="#">← Back to Dashboard</a>
+            <a class="btn btn-secondary" href="#">Go Back</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 500 — Server Error ============ -->
+  <div>
+    <div class="screen-label"><span class="tag tag-500">500</span> Server Error</div>
+    <div class="frame">
+      <div class="frame-topbar">
+        <div class="dot" style="background:#ff5f57"></div>
+        <div class="dot" style="background:#febc2e"></div>
+        <div class="dot" style="background:#28c840"></div>
+      </div>
+      <div class="error-stage">
+        <div class="error-card">
+          <div class="error-badge badge-red">⚠</div>
+          <div class="error-code">Error 500</div>
+          <div class="error-title">Something went wrong on our end</div>
+          <div class="error-desc">
+            An unexpected error occurred while processing your request. This has been logged automatically — try again in a moment.
+          </div>
+          <div class="error-actions">
+            <a class="btn btn-primary" href="#">Try Again</a>
+            <a class="btn btn-secondary" href="#">← Back to Dashboard</a>
+          </div>
+          <div class="error-meta">
+            <span>REF: E4-7721</span>
+            <span>01 Oct 2026, 14:31</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

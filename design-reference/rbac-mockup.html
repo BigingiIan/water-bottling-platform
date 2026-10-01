@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AquaOps — RBAC Module</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy-950: #0b1220;
+    --navy-900: #0f1b2e;
+    --navy-800: #16263d;
+    --navy-700: #1e3350;
+    --navy-600: #2a456b;
+    --blue-600: #2563eb;
+    --blue-500: #3b82f6;
+    --blue-50: #eff6ff;
+    --teal-500: #14b8a6;
+    --teal-50: #f0fdfa;
+    --green-500: #16a34a;
+    --green-50: #f0fdf4;
+    --amber-500: #d97706;
+    --amber-50: #fffbeb;
+    --red-500: #dc2626;
+    --red-50: #fef2f2;
+    --gray-50: #f8fafc;
+    --gray-100: #f1f5f9;
+    --gray-200: #e2e8f0;
+    --gray-300: #cbd5e1;
+    --gray-400: #94a3b8;
+    --gray-500: #64748b;
+    --gray-600: #475569;
+    --gray-700: #334155;
+    --gray-800: #1e293b;
+    --gray-900: #0f172a;
+    --radius: 8px;
+    --sidebar-w: 248px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--gray-50);
+    color: var(--gray-800);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .app { display: flex; min-height: 100vh; }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    width: var(--sidebar-w);
+    background: var(--navy-950);
+    color: #cbd5e1;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 20px 22px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    margin-bottom: 16px;
+  }
+  .brand-mark {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--blue-500), var(--teal-500));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .brand-text { font-weight: 800; font-size: 15px; color: #fff; letter-spacing: 0.2px; }
+  .brand-sub { font-size: 10.5px; color: var(--gray-400); font-weight: 500; letter-spacing: 0.4px; text-transform: uppercase; }
+
+  .nav-section { padding: 0 12px; margin-bottom: 4px; }
+  .nav-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    color: #5b6b85;
+    text-transform: uppercase;
+    padding: 14px 12px 6px 12px;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: #a9b6cc;
+    cursor: pointer;
+    text-decoration: none;
+  }
+  .nav-item:hover { background: rgba(255,255,255,0.05); color: #fff; }
+  .nav-item.active {
+    background: rgba(59,130,246,0.15);
+    color: #fff;
+    position: relative;
+  }
+  .nav-item.active::before {
+    content: '';
+    position: absolute; left: -12px; top: 6px; bottom: 6px; width: 3px;
+    background: var(--blue-500); border-radius: 0 3px 3px 0;
+  }
+  .nav-icon { width: 16px; text-align: center; font-size: 14px; opacity: 0.9; }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 14px 20px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .avatar-sm {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: var(--navy-700); color: #cbd5e1;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+  .sidebar-footer-name { font-size: 12.5px; font-weight: 600; color: #e2e8f0; }
+  .sidebar-footer-role { font-size: 10.5px; color: var(--gray-400); }
+
+  /* ---------- Main ---------- */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+
+  .topbar {
+    height: 60px;
+    background: #fff;
+    border-bottom: 1px solid var(--gray-200);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    position: sticky; top: 0; z-index: 5;
+  }
+  .breadcrumb { font-size: 13px; color: var(--gray-500); display: flex; align-items: center; gap: 6px; }
+  .breadcrumb b { color: var(--gray-800); font-weight: 600; }
+  .topbar-actions { display: flex; align-items: center; gap: 14px; }
+  .search-box {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--gray-100); border-radius: 6px;
+    padding: 7px 12px; font-size: 13px; color: var(--gray-400);
+    width: 220px;
+  }
+  .icon-btn {
+    width: 34px; height: 34px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--gray-100); font-size: 14px; color: var(--gray-600);
+    position: relative; cursor: pointer;
+  }
+  .icon-btn .dot {
+    position: absolute; top: 6px; right: 7px;
+    width: 6px; height: 6px; border-radius: 50%; background: var(--red-500);
+  }
+
+  .content { padding: 24px 28px 40px 28px; flex: 1; }
+
+  .page-head {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .page-title { font-size: 21px; font-weight: 800; color: var(--gray-900); letter-spacing: -0.3px; }
+  .page-sub { font-size: 13px; color: var(--gray-500); margin-top: 3px; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 13px; font-weight: 600;
+    padding: 9px 15px; border-radius: 6px;
+    border: 1px solid transparent; cursor: pointer;
+  }
+  .btn-primary { background: var(--blue-600); color: #fff; }
+  .btn-secondary { background: #fff; color: var(--gray-700); border-color: var(--gray-300); }
+  .btn-ghost { background: transparent; color: var(--gray-600); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 2px;
+    border-bottom: 1px solid var(--gray-200);
+    margin-bottom: 20px;
+  }
+  .tab {
+    padding: 10px 4px; margin-right: 22px;
+    font-size: 13.5px; font-weight: 600; color: var(--gray-500);
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+  }
+  .tab.active { color: var(--blue-600); border-bottom-color: var(--blue-600); }
+
+  /* KPI row */
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+  .kpi-card {
+    background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius);
+    padding: 16px 18px;
+  }
+  .kpi-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .kpi-label { font-size: 11.5px; font-weight: 700; color: var(--gray-500); text-transform: uppercase; letter-spacing: 0.4px; }
+  .kpi-icon { width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+  .kpi-value { font-size: 24px; font-weight: 800; color: var(--gray-900); }
+  .kpi-foot { font-size: 11.5px; color: var(--gray-500); margin-top: 4px; }
+  .kpi-foot.up { color: var(--green-500); }
+
+  /* Card / table shell */
+  .panel {
+    background: #fff; border: 1px solid var(--gray-200); border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-bottom: 1px solid var(--gray-200);
+  }
+  .panel-title { font-size: 14px; font-weight: 700; color: var(--gray-900); }
+  .panel-title-sub { font-size: 12px; color: var(--gray-500); font-weight: 400; margin-top: 2px; }
+
+  .filters { display: flex; gap: 8px; padding: 12px 18px; border-bottom: 1px solid var(--gray-100); background: var(--gray-50); }
+  .filter-chip {
+    font-size: 12px; font-weight: 500; color: var(--gray-600);
+    background: #fff; border: 1px solid var(--gray-300); border-radius: 6px;
+    padding: 6px 11px; display: flex; align-items: center; gap: 6px;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; font-size: 11px; font-weight: 700; color: var(--gray-500);
+    text-transform: uppercase; letter-spacing: 0.4px;
+    padding: 10px 18px; background: var(--gray-50); border-bottom: 1px solid var(--gray-200);
+  }
+  td { padding: 12px 18px; font-size: 13px; color: var(--gray-700); border-bottom: 1px solid var(--gray-100); }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: var(--gray-50); }
+
+  .user-cell { display: flex; align-items: center; gap: 10px; }
+  .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11.5px; font-weight: 700; color: #fff; flex-shrink: 0;
+  }
+  .user-name { font-weight: 600; color: var(--gray-900); font-size: 13px; }
+  .user-email { font-size: 11.5px; color: var(--gray-500); }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 700;
+    padding: 3px 9px; border-radius: 20px;
+  }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .badge-green { background: var(--green-50); color: #15803d; }
+  .badge-green .badge-dot { background: var(--green-500); }
+  .badge-amber { background: var(--amber-50); color: #b45309; }
+  .badge-amber .badge-dot { background: var(--amber-500); }
+  .badge-red { background: var(--red-50); color: #b91c1c; }
+  .badge-red .badge-dot { background: var(--red-500); }
+  .badge-gray { background: var(--gray-100); color: var(--gray-600); }
+  .badge-gray .badge-dot { background: var(--gray-400); }
+
+  .role-pill {
+    font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 5px;
+    display: inline-block;
+  }
+  .role-admin { background: #fef2f2; color: #b91c1c; }
+  .role-prodmgr { background: var(--blue-50); color: #1d4ed8; }
+  .role-prodstaff { background: var(--teal-50); color: #0f766e; }
+  .role-inv { background: #fef3c7; color: #92400e; }
+  .role-maint { background: #f3e8ff; color: #7e22ce; }
+
+  .row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  .action-icon {
+    width: 28px; height: 28px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12.5px; color: var(--gray-500); cursor: pointer;
+  }
+  .action-icon:hover { background: var(--gray-100); }
+
+  .pager { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border-top: 1px solid var(--gray-100); }
+  .pager-info { font-size: 12px; color: var(--gray-500); }
+  .pager-btns { display: flex; gap: 6px; }
+  .pager-btn { width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--gray-300); background: #fff; font-size: 12px; display: flex; align-items: center; justify-content: center; color: var(--gray-600); }
+  .pager-btn.active { background: var(--navy-900); color: #fff; border-color: var(--navy-900); }
+
+  /* --------- Permission matrix --------- */
+  .matrix-wrap { overflow-x: auto; }
+  .matrix-table { min-width: 920px; }
+  .matrix-table th.module-col { position: sticky; left: 0; background: var(--gray-50); z-index: 2; min-width: 190px; }
+  .matrix-table td.module-col { position: sticky; left: 0; background: #fff; z-index: 1; font-weight: 600; color: var(--gray-800); }
+  tr:hover td.module-col { background: var(--gray-50); }
+  .matrix-table th { text-align: center; min-width: 110px; }
+  .matrix-table td.perm-cell { text-align: center; }
+  .matrix-head-role { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+
+  .perm-toggle {
+    width: 38px; height: 20px; border-radius: 20px; background: var(--gray-200);
+    position: relative; display: inline-block; cursor: pointer;
+  }
+  .perm-toggle.on { background: var(--blue-600); }
+  .perm-toggle.partial { background: var(--amber-500); }
+  .perm-toggle .knob {
+    position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+    border-radius: 50%; background: #fff; transition: left .15s;
+  }
+  .perm-toggle.on .knob, .perm-toggle.partial .knob { left: 20px; }
+
+  .module-desc { font-size: 10.5px; color: var(--gray-400); font-weight: 400; margin-top: 1px; }
+
+  .legend { display: flex; gap: 18px; padding: 12px 18px; font-size: 11.5px; color: var(--gray-500); align-items: center; border-top: 1px solid var(--gray-100); }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+
+  .two-col { display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px; align-items: start; }
+
+  .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+  .section-title { font-size: 15px; font-weight: 700; color: var(--gray-900); margin: 26px 0 12px 0; }
+
+  /* Side panel - role detail */
+  .detail-list { padding: 16px 18px; }
+  .detail-row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid var(--gray-100); font-size: 13px; }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-key { color: var(--gray-500); }
+  .detail-val { color: var(--gray-800); font-weight: 600; }
+
+  .audit-item { display: flex; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--gray-100); }
+  .audit-item:last-child { border-bottom: none; }
+  .audit-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+  .audit-text { font-size: 12.5px; color: var(--gray-700); }
+  .audit-text b { color: var(--gray-900); }
+  .audit-time { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">💧</div>
+      <div>
+        <div class="brand-text">AquaOps</div>
+        <div class="brand-sub">Operations Console</div>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <a class="nav-item"><span class="nav-icon">▣</span> Dashboard</a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Production</div>
+      <a class="nav-item"><span class="nav-icon">⚙</span> Schedule</a>
+      <a class="nav-item"><span class="nav-icon">📦</span> Production Runs</a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Inventory</div>
+      <a class="nav-item"><span class="nav-icon">▦</span> Stock Overview</a>
+      <a class="nav-item"><span class="nav-icon">🧾</span> Orders</a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">Analytics</div>
+      <a class="nav-item"><span class="nav-icon">📈</span> Forecasting</a>
+      <a class="nav-item"><span class="nav-icon">📊</span> Reports</a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-label">System</div>
+      <a class="nav-item active"><span class="nav-icon">🛡</span> Users &amp; Roles</a>
+      <a class="nav-item"><span class="nav-icon">🕘</span> Audit Logs</a>
+      <a class="nav-item"><span class="nav-icon">⚙</span> Settings</a>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="avatar-sm">IM</div>
+      <div>
+        <div class="sidebar-footer-name">Ian M.</div>
+        <div class="sidebar-footer-role">System Administrator</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <div class="main">
+
+    <div class="topbar">
+      <div class="breadcrumb">System <span>/</span> <b>Users &amp; Roles</b></div>
+      <div class="topbar-actions">
+        <div class="search-box">🔍 Search users, roles…</div>
+        <div class="icon-btn">🔔<span class="dot"></span></div>
+        <div class="avatar-sm" style="background:var(--navy-700)">IM</div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <div class="page-head">
+        <div>
+          <div class="page-title">Users &amp; Roles</div>
+          <div class="page-sub">Manage staff access across Production, Inventory, Orders and Analytics modules</div>
+        </div>
+        <button class="btn btn-primary">+ Invite User</button>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active">All Users</div>
+        <div class="tab">Roles &amp; Permissions</div>
+        <div class="tab">Audit Log</div>
+      </div>
+
+      <!-- KPI row -->
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-top">
+            <div class="kpi-label">Total Users</div>
+            <div class="kpi-icon" style="background:var(--blue-50)">👥</div>
+          </div>
+          <div class="kpi-value">34</div>
+          <div class="kpi-foot">Across 5 roles</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-top">
+            <div class="kpi-label">Active Today</div>
+            <div class="kpi-icon" style="background:var(--green-50)">●</div>
+          </div>
+          <div class="kpi-value">21</div>
+          <div class="kpi-foot up">↑ 62% of staff</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-top">
+            <div class="kpi-label">Pending Invites</div>
+            <div class="kpi-icon" style="background:var(--amber-50)">✉</div>
+          </div>
+          <div class="kpi-value">2</div>
+          <div class="kpi-foot">Awaiting acceptance</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-top">
+            <div class="kpi-label">Suspended</div>
+            <div class="kpi-icon" style="background:var(--red-50)">⊘</div>
+          </div>
+          <div class="kpi-value">1</div>
+          <div class="kpi-foot">Access revoked</div>
+        </div>
+      </div>
+
+      <!-- ===================== USER TABLE ===================== -->
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">Staff Directory</div>
+            <div class="panel-title-sub">34 users</div>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn btn-secondary btn-sm">Export</button>
+            <button class="btn btn-secondary btn-sm">⚙ Columns</button>
+          </div>
+        </div>
+        <div class="filters">
+          <div class="filter-chip">Role: All ▾</div>
+          <div class="filter-chip">Status: All ▾</div>
+          <div class="filter-chip">Module: All ▾</div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Modules</th>
+              <th>Last Active</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div class="user-cell">
+                  <div class="avatar" style="background:#2563eb">JK</div>
+                  <div><div class="user-name">John Kamau</div><div class="user-email">j.kamau@aquaops.co.ke</div></div>
+                </div>
+              </td>
+              <td><span class="role-pill role-admin">Administrator</span></td>
+              <td><span class="badge badge-green"><span class="badge-dot"></span>Active</span></td>
+              <td class="mono">Full Access</td>
+              <td>2 min ago</td>
+              <td><div class="row-actions"><div class="action-icon">✎</div><div class="action-icon">⋯</div></div></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="user-cell">
+                  <div class="avatar" style="background:#0f766e">AN</div>
+                  <div><div class="user-name">Amina Njoroge</div><div class="user-email">a.njoroge@aquaops.co.ke</div></div>
+                </div>
+              </td>
+              <td><span class="role-pill role-prodmgr">Production Manager</span></td>
+              <td><span class="badge badge-green"><span class="badge-dot"></span>Active</span></td>
+              <td class="mono">Production, Reports</td>
+              <td>14 min ago</td>
+              <td><div class="row-actions"><div class="action-icon">✎</div><div class="action-icon">⋯</div></div></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="user-cell">
+                  <div class="avatar" style="background:#7e22ce">DM</div>
+                  <div><div class="user-name">David Mwangi</div><div class="user-email">d.mwangi@aquaops.co.ke</div></div>
+                </div>
+              </td>
+              <td><span class="role-pill role-maint">Maintenance Staff</span></td>
+              <td><span class="badge badge-green"><span class="badge-dot"></span>Active</span></td>
+              <td class="mono">Equipment</td>
+              <td>1 hr ago</td>
+              <td><div class="row-actions"><div class="action-icon">✎</div><div class="action-icon">⋯</div></div></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="user-cell">
+                  <div class="avatar" style="background:#b45309">FW</div>
+                  <div><div class="user-name">Faith Wambui</div><div class="user-email">f.wambui@aquaops.co.ke</div></div>
+                </div>
+              </td>
+              <td><span class="role-pill role-inv">Inventory Staff</span></td>
+              <td><span class="badge badge-amber"><span class="badge-dot"></span>Pending Invite</span></td>
+              <td class="mono">Inventory, Orders</td>
+              <td>—</td>
+              <td><div class="row-actions"><div class="action-icon">✎</div><div class="action-icon">⋯</div></div></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="user-cell">
+                  <div class="avatar" style="background:#0f766e">PO</div>
+                  <div><div class="user-name">Peter Otieno</div><div class="user-email">p.otieno@aquaops.co.ke</div></div>
+                </div>
+              </td>
+              <td><span class="role-pill role-prodstaff">Production Staff</span></td>
+              <td><span class="badge badge-red"><span class="badge-dot"></span>Suspended</span></td>
+              <td class="mono">Production (view only)</td>
+              <td>12 days ago</td>
+              <td><div class="row-actions"><div class="action-icon">✎</div><div class="action-icon">⋯</div></div></td>
+            </tr>
+            <tr>
+              <td>
+                <div class="user-cell">
+                  <div class="avatar" style="background:#2563eb">GK</div>
+                  <div><div class="user-name">Grace Kiptoo</div><div class="user-email">g.kiptoo@aquaops.co.ke</div></div>
+                </div>
+              </td>
+              <td><span class="role-pill role-prodmgr">Production Manager</span></td>
+              <td><span class="badge badge-green"><span class="badge-dot"></span>Active</span></td>
+              <td class="mono">Production, Reports</td>
+              <td>38 min ago</td>
+              <td><div class="row-actions"><div class="action-icon">✎</div><div class="action-icon">⋯</div></div></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="pager">
+          <div class="pager-info">Showing 1–6 of 34 users</div>
+          <div class="pager-btns">
+            <div class="pager-btn">‹</div>
+            <div class="pager-btn active">1</div>
+            <div class="pager-btn">2</div>
+            <div class="pager-btn">3</div>
+            <div class="pager-btn">›</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===================== PERMISSION MATRIX ===================== -->
+      <div class="section-title">Role &amp; Permission Matrix</div>
+      <div class="two-col">
+
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <div class="panel-title">Module Access by Role</div>
+              <div class="panel-title-sub">Toggle module-level access per role</div>
+            </div>
+            <button class="btn btn-secondary btn-sm">+ New Role</button>
+          </div>
+          <div class="matrix-wrap">
+            <table class="matrix-table">
+              <thead>
+                <tr>
+                  <th class="module-col">Module</th>
+                  <th><div class="matrix-head-role"><span class="role-pill role-admin">Admin</span></div></th>
+                  <th><div class="matrix-head-role"><span class="role-pill role-prodmgr">Prod. Mgr</span></div></th>
+                  <th><div class="matrix-head-role"><span class="role-pill role-prodstaff">Prod. Staff</span></div></th>
+                  <th><div class="matrix-head-role"><span class="role-pill role-inv">Inventory</span></div></th>
+                  <th><div class="matrix-head-role"><span class="role-pill role-maint">Maintenance</span></div></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="module-col">Dashboard<div class="module-desc">KPI overview</div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                </tr>
+                <tr>
+                  <td class="module-col">Production<div class="module-desc">Schedule &amp; runs</div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle partial"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                </tr>
+                <tr>
+                  <td class="module-col">Inventory<div class="module-desc">Stock &amp; requisitions</div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle partial"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                </tr>
+                <tr>
+                  <td class="module-col">Orders<div class="module-desc">Customer &amp; delivery</div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle partial"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                </tr>
+                <tr>
+                  <td class="module-col">Equipment<div class="module-desc">Maintenance tasks</div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                </tr>
+                <tr>
+                  <td class="module-col">Forecasting<div class="module-desc">ML demand prediction</div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                </tr>
+                <tr>
+                  <td class="module-col">Users &amp; Roles<div class="module-desc">RBAC administration</div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                </tr>
+                <tr>
+                  <td class="module-col">Audit Logs<div class="module-desc">System activity trail</div></td>
+                  <td class="perm-cell"><div class="perm-toggle on"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                  <td class="perm-cell"><div class="perm-toggle"><div class="knob"></div></div></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="legend">
+            <div class="legend-item"><div class="perm-toggle on" style="width:28px;height:15px;"><div class="knob" style="width:11px;height:11px;top:2px;left:15px;"></div></div> Full access</div>
+            <div class="legend-item"><div class="perm-toggle partial" style="width:28px;height:15px;"><div class="knob" style="width:11px;height:11px;top:2px;left:15px;"></div></div> View only</div>
+            <div class="legend-item"><div class="perm-toggle" style="width:28px;height:15px;"><div class="knob" style="width:11px;height:11px;top:2px;left:2px;"></div></div> No access</div>
+          </div>
+        </div>
+
+        <!-- Role detail side panel -->
+        <div>
+          <div class="panel" style="margin-bottom:18px;">
+            <div class="panel-head">
+              <div class="panel-title">Role: Production Manager</div>
+              <div class="action-icon">✎</div>
+            </div>
+            <div class="detail-list">
+              <div class="detail-row"><span class="detail-key">Users assigned</span><span class="detail-val">6</span></div>
+              <div class="detail-row"><span class="detail-key">Full-access modules</span><span class="detail-val">2</span></div>
+              <div class="detail-row"><span class="detail-key">View-only modules</span><span class="detail-val">2</span></div>
+              <div class="detail-row"><span class="detail-key">Created</span><span class="detail-val">Jan 2024</span></div>
+              <div class="detail-row"><span class="detail-key">Last modified</span><span class="detail-val">3 days ago</span></div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head">
+              <div class="panel-title">Recent Access Changes</div>
+            </div>
+            <div class="audit-item">
+              <div class="audit-dot" style="background:var(--green-500)"></div>
+              <div>
+                <div class="audit-text"><b>Grace Kiptoo</b> granted Inventory (view)</div>
+                <div class="audit-time">Today, 09:14 — by Ian M.</div>
+              </div>
+            </div>
+            <div class="audit-item">
+              <div class="audit-dot" style="background:var(--red-500)"></div>
+              <div>
+                <div class="audit-text"><b>Peter Otieno</b> access suspended</div>
+                <div class="audit-time">12 days ago — by John Kamau</div>
+              </div>
+            </div>
+            <div class="audit-item">
+              <div class="audit-dot" style="background:var(--blue-500)"></div>
+              <div>
+                <div class="audit-text"><b>Faith Wambui</b> invited as Inventory Staff</div>
+                <div class="audit-time">2 days ago — by Ian M.</div>
+              </div>
+            </div>
+            <div class="audit-item">
+              <div class="audit-dot" style="background:var(--amber-500)"></div>
+              <div>
+                <div class="audit-text">Role <b>Production Manager</b> permissions modified</div>
+                <div class="audit-time">3 days ago — by Ian M.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>
