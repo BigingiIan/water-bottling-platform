@@ -38,9 +38,10 @@ class ProductionScheduleTable extends Component
     }
 
     #[On('production-logged')]
+    #[On('schedule-created')]
     public function refreshTotals(): void
     {
-        // No-op: receiving the event re-renders the table with fresh log totals.
+        // No-op: receiving the event re-renders the table with fresh schedules and log totals.
     }
 
     public function render(): View

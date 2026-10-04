@@ -191,8 +191,9 @@
                                             aria-label="Log production for {{ $schedule->product_sku }} at {{ $time }}"
                                             class="rounded-md border border-gray-300 bg-white px-2.5 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-50"
                                         >Log</button>
+                                    @else
+                                        <span class="text-xs text-gray-400">—</span>
                                     @endif
-                                    <button type="button" aria-label="More actions for {{ $schedule->product_sku }} at {{ $time }}" class="flex size-7 items-center justify-center rounded-md text-[12.5px] text-gray-500 hover:bg-gray-100">⋯</button>
                                 </div>
                             </td>
                         </tr>

@@ -28,7 +28,8 @@
             'label' => 'Production',
             'items' => [
                 ['label' => 'Schedule', 'module' => 'production', 'icon' => '⚙', 'href' => route('production.schedule')],
-                ['label' => 'Production Runs', 'module' => 'production', 'icon' => '📦', 'href' => '#'],
+                ['label' => 'Production Runs', 'module' => 'production', 'icon' => '📦', 'href' => route('production.runs')],
+                ['label' => 'History', 'module' => 'production', 'icon' => '🕘', 'href' => route('production.history')],
             ],
         ],
         [

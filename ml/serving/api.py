@@ -276,7 +276,10 @@ def predict_units(bundle: ModelBundle, request: PredictionRequest) -> float:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     model_dir = Path(
-        os.environ.get("ML_MODEL_DIR", str(Path(__file__).resolve().parents[1] / "models"))
+        os.environ.get(
+            "ML_MODEL_DIR",
+            str(Path(__file__).resolve().parents[1] / "saved_models"),
+        )
     )
     registry = ModelRegistry(model_dir)
     registry.load_available()

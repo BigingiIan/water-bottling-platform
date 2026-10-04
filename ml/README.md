@@ -4,7 +4,7 @@ Train and export the per-SKU models from the repository root:
 
 ```powershell
 uv run --directory ml python training/train_pipeline.py `
-  --data data/kenya_water_demand_daily.csv `
+  --data ..\data\kenya_water_demand_daily.csv `
   --output saved_models
 ```
 
@@ -18,7 +18,8 @@ identical `manifest.json` is written because that is the filename consumed by
 the current FastAPI model loader. Likewise, `meta_stacker.joblib` is exported
 alongside `meta_learner.joblib`, which is the filename the API loads.
 
-Point the standalone API at the exported directory when starting it:
+The service defaults to `ml/saved_models`; set `ML_MODEL_DIR` only if the
+artifacts are stored elsewhere:
 
 ```powershell
 $env:ML_MODEL_DIR = "C:\path\to\water-bottling-platform\ml\saved_models"
