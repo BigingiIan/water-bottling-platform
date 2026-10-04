@@ -25,3 +25,8 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+/model_reference
+/ml/models/
+/ml/saved_models/
+__pycache__/
+*.py[cod]

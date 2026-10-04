@@ -30,4 +30,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/staff/permissions', RolePermissionMatrix::class)
         ->middleware('module.access:users-roles')
         ->name('staff.permissions');
+
+    Route::view('/production/schedule', 'production.schedule')
+        ->middleware('module.access:production')
+        ->name('production.schedule');
 });
