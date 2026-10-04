@@ -9,7 +9,38 @@ use Illuminate\Support\Str;
 
 class ModuleAccess
 {
+    public function can(mixed $user, string $moduleSlug, bool $write = false): bool
+    {
+        if (! $user instanceof User) {
+            return false;
+        }
+
+        $accessLevel = $this->accessLevel($user, $moduleSlug);
+
+        if ($accessLevel === null || $accessLevel === 'none') {
+            return false;
+        }
+
+        return ! $write || $accessLevel === 'full';
+    }
+
     public function authorize(User $user, string $moduleSlug, bool $write = false): void
+    {
+        if ($this->can($user, $moduleSlug, $write)) {
+            return;
+        }
+
+        $moduleName = DB::table('modules')->where('slug', $moduleSlug)->value('name') ?? Str::headline($moduleSlug);
+        $accessLevel = $this->accessLevel($user, $moduleSlug);
+
+        if ($accessLevel === null || $accessLevel === 'none') {
+            abort(403, 'no_access:'.$moduleName);
+        }
+
+        abort(403, 'read_only:'.$moduleName);
+    }
+
+    private function accessLevel(User $user, string $moduleSlug): ?string
     {
         $module = DB::table('modules')
             ->leftJoin('role_module_permissions', function (JoinClause $join) use ($user): void {
@@ -17,20 +48,8 @@ class ModuleAccess
                     ->where('role_module_permissions.role_id', '=', $user->role_id);
             })
             ->where('modules.slug', $moduleSlug)
-            ->first([
-                'modules.name',
-                'role_module_permissions.access_level',
-            ]);
+            ->first(['role_module_permissions.access_level']);
 
-        $moduleName = $module?->name ?? Str::headline($moduleSlug);
-        $accessLevel = $module?->access_level;
-
-        if ($accessLevel === null || $accessLevel === 'none') {
-            abort(403, 'no_access:'.$moduleName);
-        }
-
-        if ($write && $accessLevel !== 'full') {
-            abort(403, 'read_only:'.$moduleName);
-        }
+        return $module?->access_level;
     }
 }

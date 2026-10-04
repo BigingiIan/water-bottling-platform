@@ -8,12 +8,15 @@ authors = [
 ]
 requires-python = ">=3.11"
 dependencies = [
+    "fastapi>=0.142.2",
+    "joblib>=1.5.3",
     "numpy>=2.4.6",
     "pandas>=3.0.5",
     "prophet>=1.4.0",
     "scikit-learn>=1.9.0",
     "streamlit>=1.62.0",
     "tensorflow>=2.21.0",
+    "uvicorn>=0.52.4",
     "xgboost>=3.2.0",
 ]
 
@@ -29,3 +32,7 @@ dev = [
     "jupyter>=1.1.1",
     "pytest>=9.1.1",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

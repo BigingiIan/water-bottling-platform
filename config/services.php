@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'ml_forecast' => [
+        'url' => env('ML_FORECAST_URL', 'http://127.0.0.1:8001'),
+        'timeout' => env('ML_FORECAST_TIMEOUT', 3),
+    ],
+
 ];

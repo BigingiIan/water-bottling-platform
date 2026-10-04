@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\UserImpersonationController;
+use App\Livewire\ProductionHistory;
+use App\Livewire\ProductionRuns;
 use App\Livewire\RolePermissionMatrix;
 use App\Livewire\StaffDirectory;
 use Illuminate\Support\Facades\Route;
@@ -30,4 +32,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/staff/permissions', RolePermissionMatrix::class)
         ->middleware('module.access:users-roles')
         ->name('staff.permissions');
+
+    Route::view('/production/schedule', 'production.schedule')
+        ->middleware('module.access:production')
+        ->name('production.schedule');
+    Route::get('/production/runs', ProductionRuns::class)
+        ->middleware('module.access:production')
+        ->name('production.runs');
+    Route::get('/production/history', ProductionHistory::class)
+        ->middleware('module.access:production')
+        ->name('production.history');
 });

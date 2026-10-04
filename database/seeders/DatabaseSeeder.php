@@ -18,6 +18,8 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             ModuleSeeder::class,
             RoleModulePermissionSeeder::class,
+            ProductionLineSeeder::class,
+            DailySkuFeatureSeeder::class,
         ]);
 
         if (app()->environment('local', 'testing')) {
