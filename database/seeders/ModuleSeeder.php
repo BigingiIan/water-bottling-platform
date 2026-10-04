@@ -21,6 +21,7 @@ class ModuleSeeder extends Seeder
             ['name' => 'Forecasting', 'slug' => 'forecasting', 'description' => 'Demand prediction'],
             ['name' => 'Users & Roles', 'slug' => 'users-roles', 'description' => 'RBAC administration'],
             ['name' => 'Audit Logs', 'slug' => 'audit-logs', 'description' => 'System activity trail'],
+            ['name' => 'Error Logs', 'slug' => 'error-logs', 'description' => 'Branded application errors'],
         ];
 
         foreach ($modules as $module) {

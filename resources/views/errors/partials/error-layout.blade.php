@@ -1,5 +1,8 @@
 @php
-    $reference = strtoupper(bin2hex(random_bytes(4)));
+    if (! isset($reference)) {
+        $rawReference = strtoupper(bin2hex(random_bytes(4)));
+        $reference = substr($rawReference, 0, 4).'-'.substr($rawReference, 4);
+    }
     $renderedAt = now();
     $timestamp = $renderedAt->format('d M Y, H:i');
 @endphp
@@ -229,7 +232,7 @@
 
             @if ($showMeta ?? false)
                 <footer class="error-meta">
-                    <span>REF: {{ substr($reference, 0, 4) }}-{{ substr($reference, 4) }}</span>
+                    <span>REF: {{ $reference }}</span>
                     <time datetime="{{ $renderedAt->toIso8601String() }}">{{ $timestamp }}</time>
                 </footer>
             @endif

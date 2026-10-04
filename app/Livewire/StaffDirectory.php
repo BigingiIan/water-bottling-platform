@@ -9,6 +9,7 @@ use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -24,6 +25,8 @@ class StaffDirectory extends Component
     public string $statusFilter = '';
 
     public string $moduleFilter = '';
+
+    public ?int $openMenuUserId = null;
 
     public function updatedSearch(): void
     {
@@ -43,6 +46,28 @@ class StaffDirectory extends Component
     public function updatedModuleFilter(): void
     {
         $this->resetPage();
+    }
+
+    #[On('user-created')]
+    public function refreshList(): void
+    {
+        $this->resetPage();
+    }
+
+    #[On('user-changed')]
+    public function closeMenus(): void
+    {
+        $this->openMenuUserId = null;
+    }
+
+    public function toggleMenu(int $userId): void
+    {
+        $user = auth()->user();
+
+        abort_unless($user instanceof User, 403);
+        app(ModuleAccess::class)->authorize($user, 'users-roles', write: true);
+
+        $this->openMenuUserId = $this->openMenuUserId === $userId ? null : $userId;
     }
 
     public function render(): View
@@ -84,6 +109,7 @@ class StaffDirectory extends Component
             'users' => $users,
             'roles' => Role::query()->orderBy('name')->get(),
             'modules' => Module::query()->orderBy('name')->get(),
+            'canInvite' => app(ModuleAccess::class)->can($user, 'users-roles', write: true),
             'rolePresentation' => [
                 'administrator' => ['class' => 'bg-red-50 text-[#b91c1c]', 'avatarColor' => '#2563eb'],
                 'production-manager' => ['class' => 'bg-blue-50 text-[#1d4ed8]', 'avatarColor' => '#0f766e'],

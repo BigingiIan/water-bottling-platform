@@ -50,6 +50,8 @@
             'label' => 'System',
             'items' => [
                 ['label' => 'Users & Roles', 'module' => 'users-roles', 'icon' => '🛡', 'href' => route('staff.directory')],
+                ['label' => 'Roles & Permissions', 'module' => 'users-roles', 'requiredAccess' => 'full', 'icon' => '🔐', 'href' => route('staff.permissions')],
+                ['label' => 'Error Logs', 'module' => 'error-logs', 'icon' => '⚠', 'href' => route('errors.index')],
                 ['label' => 'Audit Logs', 'module' => 'audit-logs', 'icon' => '🕘', 'href' => '#'],
                 ['label' => 'Settings', 'module' => 'settings', 'icon' => '⚙', 'href' => '#'],
             ],
@@ -60,7 +62,13 @@
         $navigationSection['items'] = array_values(array_filter(
             $navigationSection['items'],
             fn (array $navigationItem): bool => ($navigationItem['alwaysVisible'] ?? false)
-                || in_array($navigationItem['module'], $accessibleModuleSlugs, true),
+                || in_array(
+                    $navigationItem['module'],
+                    ($navigationItem['requiredAccess'] ?? null) === 'full'
+                        ? $fullAccessModuleSlugs
+                        : $accessibleModuleSlugs,
+                    true,
+                ),
         ));
 
         foreach ($navigationSection['items'] as &$navigationItem) {

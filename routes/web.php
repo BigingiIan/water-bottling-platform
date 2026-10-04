@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\PasswordSetController;
 use App\Http\Controllers\UserImpersonationController;
+use App\Livewire\ErrorLogs;
 use App\Livewire\ProductionHistory;
 use App\Livewire\ProductionRuns;
 use App\Livewire\RolePermissionMatrix;
@@ -18,6 +20,8 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->name('logout');
+    Route::get('/password/set', [PasswordSetController::class, 'show'])->name('password.set');
+    Route::post('/password/set', [PasswordSetController::class, 'update'])->name('password.set.update');
     Route::post('/impersonation', [UserImpersonationController::class, 'store'])
         ->name('impersonation.store');
     Route::post('/impersonation/return', [UserImpersonationController::class, 'destroy'])
@@ -32,6 +36,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/staff/permissions', RolePermissionMatrix::class)
         ->middleware('module.access:users-roles')
         ->name('staff.permissions');
+    Route::get('/system/errors', ErrorLogs::class)
+        ->middleware('module.access:error-logs')
+        ->name('errors.index');
 
     Route::view('/production/schedule', 'production.schedule')
         ->middleware('module.access:production')

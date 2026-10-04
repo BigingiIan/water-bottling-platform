@@ -2,12 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Livewire\RolePermissionMatrix;
+use App\Models\Module;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\ModuleSeeder;
 use Database\Seeders\RoleModulePermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class SidebarNavigationTest extends TestCase
@@ -37,6 +41,8 @@ class SidebarNavigationTest extends TestCase
             ->assertSee('Orders')
             ->assertSee('Forecasting')
             ->assertDontSee('Users & Roles')
+            ->assertDontSee('Roles & Permissions')
+            ->assertDontSee('Error Logs')
             ->assertDontSee('Audit Logs')
             ->assertDontSee('Reports')
             ->assertDontSee('Settings');
@@ -57,7 +63,57 @@ class SidebarNavigationTest extends TestCase
             ->assertSee('Production Runs')
             ->assertDontSee('Stock Overview')
             ->assertDontSee('Users & Roles')
+            ->assertDontSee('Roles & Permissions')
+            ->assertDontSee('Error Logs')
             ->assertDontSee('Audit Logs');
+    }
+
+    public function test_roles_and_permissions_sidebar_item_requires_full_users_and_roles_access(): void
+    {
+        $productionManager = Role::query()->where('slug', 'production-manager')->firstOrFail();
+        $usersAndRoles = Module::query()->where('slug', 'users-roles')->firstOrFail();
+        DB::table('role_module_permissions')
+            ->where('role_id', $productionManager->id)
+            ->where('module_id', $usersAndRoles->id)
+            ->update(['access_level' => 'view']);
+
+        $this->actingAs($this->userWithRole('production-manager'))
+            ->get('/dashboard')
+            ->assertSee('Users & Roles')
+            ->assertDontSee('Roles & Permissions');
+
+        DB::table('role_module_permissions')
+            ->where('role_id', $productionManager->id)
+            ->where('module_id', $usersAndRoles->id)
+            ->update(['access_level' => 'full']);
+
+        $this->get('/dashboard')
+            ->assertSee('Roles & Permissions')
+            ->assertSee(route('staff.permissions'));
+    }
+
+    public function test_created_custom_role_uses_its_permission_rows_for_sidebar_access(): void
+    {
+        $administrator = $this->userWithRole('administrator');
+
+        $this->actingAs($administrator);
+
+        Livewire::test(RolePermissionMatrix::class)
+            ->call('openCreateRoleModal')
+            ->set('name', 'Quality Lead')
+            ->call('saveRole')
+            ->assertHasNoErrors();
+
+        $qualityLead = Role::query()->where('slug', 'quality-lead')->firstOrFail();
+        DB::table('role_module_permissions')
+            ->where('role_id', $qualityLead->id)
+            ->whereIn('module_id', Module::query()->whereIn('slug', ['dashboard', 'users-roles'])->pluck('id'))
+            ->update(['access_level' => 'full']);
+
+        $this->actingAs(User::factory()->create(['role_id' => $qualityLead->id]))
+            ->get('/dashboard')
+            ->assertSee('Roles & Permissions')
+            ->assertSee(route('staff.permissions'));
     }
 
     /**

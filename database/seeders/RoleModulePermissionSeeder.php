@@ -24,6 +24,7 @@ class RoleModulePermissionSeeder extends Seeder
                 'forecasting' => 'full',
                 'users-roles' => 'full',
                 'audit-logs' => 'full',
+                'error-logs' => 'full',
             ],
             'production-manager' => [
                 'dashboard' => 'full',
@@ -34,6 +35,7 @@ class RoleModulePermissionSeeder extends Seeder
                 'forecasting' => 'full',
                 'users-roles' => 'none',
                 'audit-logs' => 'none',
+                'error-logs' => 'none',
             ],
             'production-staff' => [
                 'dashboard' => 'view',
@@ -44,6 +46,7 @@ class RoleModulePermissionSeeder extends Seeder
                 'forecasting' => 'none',
                 'users-roles' => 'none',
                 'audit-logs' => 'none',
+                'error-logs' => 'none',
             ],
             'inventory-staff' => [
                 'dashboard' => 'view',
@@ -54,6 +57,7 @@ class RoleModulePermissionSeeder extends Seeder
                 'forecasting' => 'none',
                 'users-roles' => 'none',
                 'audit-logs' => 'none',
+                'error-logs' => 'none',
             ],
             'maintenance-staff' => [
                 'dashboard' => 'view',
@@ -64,6 +68,7 @@ class RoleModulePermissionSeeder extends Seeder
                 'forecasting' => 'none',
                 'users-roles' => 'none',
                 'audit-logs' => 'none',
+                'error-logs' => 'none',
             ],
         ];
 

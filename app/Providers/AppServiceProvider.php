@@ -49,10 +49,19 @@ class AppServiceProvider extends ServiceProvider
                     ->pluck('modules.slug')
                     ->all()
                 : [];
+            $fullAccessModuleSlugs = $user?->role_id
+                ? DB::table('role_module_permissions')
+                    ->join('modules', 'modules.id', '=', 'role_module_permissions.module_id')
+                    ->where('role_module_permissions.role_id', $user->role_id)
+                    ->where('role_module_permissions.access_level', 'full')
+                    ->pluck('modules.slug')
+                    ->all()
+                : [];
 
             $view->with(compact(
                 'accessibleModuleSlugs',
                 'canImpersonate',
+                'fullAccessModuleSlugs',
                 'impersonationUsers',
                 'impersonator',
                 'isImpersonating',
