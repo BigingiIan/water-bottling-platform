@@ -28,8 +28,10 @@ class ProductionScheduleTable extends Component
     public function mount(): void
     {
         $requestedDate = request()->query('date');
+        $requestedSku = request()->query('sku');
 
         $this->selectedDate = $this->resolveDate(is_string($requestedDate) ? $requestedDate : null);
+        $this->skuFilter = is_string($requestedSku) && mb_strlen($requestedSku) <= 255 ? $requestedSku : '';
     }
 
     public function updatedSelectedDate(): void

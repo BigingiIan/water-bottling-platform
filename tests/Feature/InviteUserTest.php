@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Livewire\InviteUserModal;
+use App\Mail\UserInvitation;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\ModuleSeeder;
@@ -11,6 +12,7 @@ use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -50,6 +52,8 @@ class InviteUserTest extends TestCase
 
     public function test_creation_produces_pending_user_with_chosen_role_and_audit_entry(): void
     {
+        Mail::fake();
+
         $customRole = Role::create(['name' => 'Quality Auditor', 'slug' => 'quality-auditor']);
         $admin = auth()->user();
 
@@ -65,16 +69,95 @@ class InviteUserTest extends TestCase
         $this->assertSame($customRole->id, $user->role_id);
         $this->assertTrue($user->must_change_password);
         $this->assertTrue(Hash::check($temporaryPassword, $user->password_hash));
+        Mail::assertSent(UserInvitation::class, function (UserInvitation $mail) use ($user, $temporaryPassword): bool {
+            $content = $mail->render();
+
+            return $mail->hasTo($user->email)
+                && str_contains($content, $user->name)
+                && str_contains($content, $temporaryPassword)
+                && str_contains($content, 'required to change this password');
+        });
 
         $this->assertDatabaseHas('audit_log', [
             'user_id' => $admin->id,
+            'target_user_id' => $user->id,
             'action' => 'user.created',
             'table_name' => 'users',
         ]);
+
+        $entry = DB::table('audit_log')->where('action', 'user.created')->firstOrFail();
+        $this->assertSame([], json_decode($entry->old_values, true));
+        $this->assertSame([
+            'name' => 'New Hire',
+            'email' => 'newhire@example.test',
+            'role' => 'quality-auditor',
+            'status' => 'pending',
+            'must_change_password' => true,
+        ], json_decode($entry->new_values, true));
+    }
+
+    public function test_admin_can_set_the_invitation_password_and_user_must_change_it(): void
+    {
+        Mail::fake();
+        $temporaryPassword = 'admin-chosen-password-1';
+
+        $component = Livewire::test(InviteUserModal::class)
+            ->call('openModal')
+            ->set('name', 'New Hire')
+            ->set('email', 'newhire@example.test')
+            ->set('roleId', Role::query()->where('slug', 'production-staff')->value('id'))
+            ->set('passwordMode', 'custom')
+            ->set('customPassword', $temporaryPassword)
+            ->set('customPassword_confirmation', $temporaryPassword)
+            ->call('saveInvite')
+            ->assertHasNoErrors()
+            ->assertSee('Invitation email sent to newhire@example.test')
+            ->assertSee('shown once');
+
+        $user = User::query()->where('email', 'newhire@example.test')->firstOrFail();
+
+        $this->assertTrue(Hash::check($temporaryPassword, $user->password_hash));
+        $this->assertTrue($user->must_change_password);
+        $this->assertSame($temporaryPassword, $component->get('temporaryPassword'));
+        Mail::assertSent(UserInvitation::class, fn (UserInvitation $mail): bool => $mail->hasTo($user->email)
+            && str_contains($mail->render(), $temporaryPassword));
+    }
+
+    public function test_custom_invitation_password_requires_confirmation(): void
+    {
+        Mail::fake();
+
+        Livewire::test(InviteUserModal::class)
+            ->call('openModal')
+            ->set('name', 'New Hire')
+            ->set('email', 'newhire@example.test')
+            ->set('roleId', Role::query()->where('slug', 'production-staff')->value('id'))
+            ->set('passwordMode', 'custom')
+            ->set('customPassword', 'admin-chosen-password-1')
+            ->set('customPassword_confirmation', 'different-password')
+            ->call('saveInvite')
+            ->assertHasErrors(['customPassword' => 'confirmed']);
+
+        $this->assertDatabaseMissing('users', ['email' => 'newhire@example.test']);
+        Mail::assertNothingSent();
+    }
+
+    public function test_invitation_email_escapes_user_supplied_name(): void
+    {
+        $content = (new UserInvitation(
+            "Amina <script>alert('xss')</script>",
+            'amina@example.test',
+            'temporary-password-1',
+        ))->render();
+
+        $this->assertStringContainsString('&lt;script&gt;', $content);
+        $this->assertStringNotContainsString("<script>alert('xss')</script>", $content);
     }
 
     public function test_temporary_password_is_shown_once_with_warning_then_cleared(): void
     {
+        Mail::fake();
+
         $component = Livewire::test(InviteUserModal::class)
             ->call('openModal')
             ->set('name', 'New Hire')
@@ -86,7 +169,7 @@ class InviteUserTest extends TestCase
 
         $component
             ->assertSee($temporaryPassword)
-            ->assertSee('shown again')
+            ->assertSee('shown once')
             ->call('closeModal')
             ->call('openModal')
             ->assertSet('temporaryPassword', null)

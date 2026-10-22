@@ -119,6 +119,10 @@ class StaffUserActionsTest extends TestCase
             'action' => 'user.reactivated',
             'table_name' => 'users',
         ]);
+
+        $entry = DB::table('audit_log')->where('action', 'user.reactivated')->firstOrFail();
+        $this->assertSame(['status' => 'suspended'], json_decode($entry->old_values, true));
+        $this->assertSame(['status' => 'active'], json_decode($entry->new_values, true));
     }
 
     public function test_reset_password_sets_flag_shows_temp_once_and_writes_audit(): void
@@ -148,6 +152,14 @@ class StaffUserActionsTest extends TestCase
 
         $this->assertSame($admin->id, $entry->user_id);
         $this->assertSame($target->id, $entry->target_user_id);
+        $this->assertSame([
+            'password_hash' => '[redacted]',
+            'must_change_password' => false,
+        ], json_decode($entry->old_values, true));
+        $this->assertSame([
+            'password_hash' => '[redacted]',
+            'must_change_password' => true,
+        ], json_decode($entry->new_values, true));
         $this->assertStringNotContainsString($temporaryPassword, json_encode($entry));
     }
 
@@ -201,15 +213,30 @@ class StaffUserActionsTest extends TestCase
             ->call('saveRole')
             ->assertHasErrors(['roleId']);
 
+        $fresh = $admin->fresh();
+
+        $this->assertSame('active', $fresh->status);
+        $this->assertSame(Role::query()->where('slug', 'administrator')->value('id'), $fresh->role_id);
+    }
+
+    public function test_last_active_administrator_cannot_be_suspended_by_another_full_user(): void
+    {
+        $admin = User::query()->whereHas('role', fn ($query) => $query->where('slug', 'administrator'))->firstOrFail();
+        $manager = User::factory()->create([
+            'role_id' => Role::query()->where('slug', 'production-manager')->value('id'),
+        ]);
+        DB::table('role_module_permissions')
+            ->where('role_id', $manager->role_id)
+            ->where('module_id', DB::table('modules')->where('slug', 'users-roles')->value('id'))
+            ->update(['access_level' => 'full']);
+        $this->actingAs($manager);
+
         Livewire::test(UserActionsModal::class)
             ->call('openSuspendModal', $admin->id)
             ->call('confirmSuspend')
             ->assertHasErrors(['suspend']);
 
-        $fresh = $admin->fresh();
-
-        $this->assertSame('active', $fresh->status);
-        $this->assertSame(Role::query()->where('slug', 'administrator')->value('id'), $fresh->role_id);
+        $this->assertSame('active', $admin->fresh()->status);
     }
 
     public function test_admin_cannot_suspend_themselves(): void

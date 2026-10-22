@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class ProductionBatch extends Model
 {
@@ -36,5 +37,15 @@ class ProductionBatch extends Model
     public function leakageReports(): HasMany
     {
         return $this->hasMany(LeakageReport::class, 'batch_id');
+    }
+
+    public function stockMovements(): HasManyThrough
+    {
+        return $this->hasManyThrough(
+            StockMovement::class,
+            WarehouseStock::class,
+            'batch_id',
+            'warehouse_stock_id',
+        );
     }
 }

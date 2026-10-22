@@ -2,16 +2,20 @@
 
 namespace App\Livewire;
 
+use App\Mail\UserInvitation;
 use App\Models\AuditLog;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\On;
 use Livewire\Component;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class InviteUserModal extends Component
 {
@@ -23,9 +27,17 @@ class InviteUserModal extends Component
 
     public ?int $roleId = null;
 
+    public string $passwordMode = 'generate';
+
+    public string $customPassword = '';
+
+    public string $customPassword_confirmation = '';
+
     public ?string $temporaryPassword = null;
 
     public string $invitedUserEmail = '';
+
+    public bool $emailSent = false;
 
     #[On('open-invite-modal')]
     public function openModal(): void
@@ -35,14 +47,34 @@ class InviteUserModal extends Component
         abort_unless($user instanceof User, 403);
         app(ModuleAccess::class)->authorize($user, 'users-roles', write: true);
 
-        $this->reset(['name', 'email', 'roleId', 'temporaryPassword', 'invitedUserEmail']);
+        $this->reset([
+            'name',
+            'email',
+            'roleId',
+            'passwordMode',
+            'customPassword',
+            'customPassword_confirmation',
+            'temporaryPassword',
+            'invitedUserEmail',
+            'emailSent',
+        ]);
         $this->isOpen = true;
     }
 
     public function closeModal(): void
     {
         $this->isOpen = false;
-        $this->reset(['name', 'email', 'roleId', 'temporaryPassword', 'invitedUserEmail']);
+        $this->reset([
+            'name',
+            'email',
+            'roleId',
+            'passwordMode',
+            'customPassword',
+            'customPassword_confirmation',
+            'temporaryPassword',
+            'invitedUserEmail',
+            'emailSent',
+        ]);
     }
 
     public function saveInvite(): void
@@ -56,29 +88,60 @@ class InviteUserModal extends Component
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')],
             'roleId' => ['required', 'integer', Rule::exists('roles', 'id')],
+            'passwordMode' => ['required', Rule::in(['generate', 'custom'])],
+            'customPassword' => ['exclude_unless:passwordMode,custom', 'required', 'string', 'min:12', 'max:255', 'confirmed'],
         ]);
 
-        $temporaryPassword = Str::random(16);
+        $temporaryPassword = $validated['passwordMode'] === 'custom'
+            ? $validated['customPassword']
+            : Str::random(16);
 
-        $invited = User::create([
-            'name' => $validated['name'],
-            'email' => $validated['email'],
-            'password_hash' => Hash::make($temporaryPassword),
-            'role_id' => $validated['roleId'],
-            'status' => 'pending',
-            'must_change_password' => true,
-        ]);
+        $invited = DB::transaction(function () use ($user, $validated, $temporaryPassword): User {
+            $invited = User::create([
+                'name' => $validated['name'],
+                'email' => $validated['email'],
+                'password_hash' => Hash::make($temporaryPassword),
+                'role_id' => $validated['roleId'],
+                'status' => 'pending',
+                'must_change_password' => true,
+            ]);
 
-        AuditLog::create([
-            'user_id' => $user->id,
-            'action' => 'user.created',
-            'table_name' => 'users',
-        ]);
+            AuditLog::create([
+                'user_id' => $user->id,
+                'target_user_id' => $invited->id,
+                'action' => 'user.created',
+                'table_name' => 'users',
+                'old_values' => [],
+                'new_values' => [
+                    'name' => $invited->name,
+                    'email' => $invited->email,
+                    'role' => $invited->role?->slug,
+                    'status' => $invited->status,
+                    'must_change_password' => $invited->must_change_password,
+                ],
+            ]);
 
-        $this->reset(['name', 'email', 'roleId']);
+            return $invited;
+        });
+
         $this->invitedUserEmail = $invited->email;
         $this->temporaryPassword = $temporaryPassword;
 
+        try {
+            Mail::to($invited)->send(new UserInvitation(
+                $invited->name,
+                $invited->email,
+                $temporaryPassword,
+            ));
+            $this->emailSent = true;
+        } catch (TransportExceptionInterface) {
+            $this->addError(
+                'emailDelivery',
+                'The account was created, but the invitation email could not be sent. Share the temporary password securely and check the mail configuration.',
+            );
+        }
+
+        $this->reset(['name', 'email', 'roleId', 'passwordMode', 'customPassword', 'customPassword_confirmation']);
         $this->dispatch('user-created', userId: $invited->id);
     }
 

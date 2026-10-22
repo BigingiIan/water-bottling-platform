@@ -48,6 +48,20 @@ class SidebarNavigationTest extends TestCase
             ->assertDontSee('Settings');
     }
 
+    public function test_inventory_route_marks_stock_overview_as_the_active_sidebar_item(): void
+    {
+        $administrator = $this->userWithRole('administrator');
+
+        $this->actingAs($administrator)
+            ->get(route('inventory.overview'))
+            ->assertOk()
+            ->assertSeeInOrder([
+                'href="'.route('inventory.overview').'"',
+                'aria-current="page"',
+                '>Stock Overview</span>',
+            ], false);
+    }
+
     public function test_sidebar_uses_impersonated_users_permissions(): void
     {
         $administrator = $this->userWithRole('administrator');

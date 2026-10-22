@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class WarehouseStock extends Model
 {
+    protected $table = 'warehouse_stock';
+
     public $timestamps = false;
 
     protected $fillable = [
@@ -37,5 +39,10 @@ class WarehouseStock extends Model
     public function salesTransactions(): HasMany
     {
         return $this->hasMany(SalesTransaction::class, 'stock_id');
+    }
+
+    public function movements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class);
     }
 }

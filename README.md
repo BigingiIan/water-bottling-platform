@@ -69,8 +69,16 @@ An internal operations platform for Kenyan water bottling SMEs, combining produc
 - "Log Production" modal that writes `production_logs` entries for the authenticated operator, gated by Production-module `full` access
 - Forecast strip showing the ML-suggested quantity for the next active SKU, or a clear unavailable state
 
+### Inventory: in progress
+- Inventory overview page (`/inventory`) with stock levels, filtering, and batch management, gated by the Inventory module
+- `StockService` records every change as a `stock_movements` entry and derives stock levels and status checks from them
+- Leakage reports are flagged automatically when the discrepancy exceeds a threshold (`LeakageReportFlag`)
+
+### User invitations
+- Administrators invite staff by email (`UserInvitation` mailable); invitees set their own password via a signed link
+
 ### Planned
-Inventory and orders views, quality, maintenance, reports, and a dedicated forecasting page.
+Orders views, quality, maintenance, reports, and a dedicated forecasting page.
 
 ## Getting started
 
@@ -185,15 +193,19 @@ Each SKU needs an artifact bundle plus a manifest (`metadata.json` with `model_v
 
 ```
 app/
-  Livewire/                 Livewire components (staff, permissions, production schedule)
+  Livewire/                 Livewire components (staff, permissions, production schedule, inventory)
   Services/MLForecastClient.php
+  Services/Inventory/       StockService (stock movements and calculations)
+  Support/                  Helpers such as LeakageReportFlag
+  Mail/                     UserInvitation mailable
+  Exceptions/Inventory/     Domain exceptions for stock operations
 database/
   migrations/
   seeders/                  Roles, modules, permissions, production lines, test users
 resources/views/            Blade and Livewire views, branded error pages
-design-reference/           HTML design mockups (RBAC, production, error states)
+design-reference/           HTML design mockups (RBAC, production, inventory, error states)
 model_reference/            Training notebook (reference for ML work)
-<fastapi-service>/          Prediction service
+ml/                         Training code, prediction service, and ML tests (see ml/README.md)
 tests/
 ```
 
@@ -204,7 +216,7 @@ php artisan test            # Laravel suite
 # FastAPI suite: TODO add command (e.g. pytest from the service directory)
 ```
 
-At the last check: 73 Laravel tests and 5 FastAPI tests passing.
+Inventory coverage lives in `InventoryOverviewTest`, `Services/Inventory/StockServiceTest` and `Unit/Support/LeakageReportFlagTest`.
 
 ## Project status
 
@@ -212,11 +224,13 @@ At the last check: 73 Laravel tests and 5 FastAPI tests passing.
 |---|---|
 | RBAC (schema, matrix, enforcement, login, view-as, error pages) | Complete |
 | Production schedule and log production | Wired to real data |
+| User invitations by email | Complete |
 | Prediction service and Laravel client | Built, tested |
 | `train_pipeline.py` and saved model artifacts | **Pending.** Real predictions need this. |
 | Promotion and temperature data sources | **Pending.** Source not yet chosen. |
 | Specific forecast-unavailable reasons in the UI | Optional polish (the client returns only a nullable float today) |
-| Inventory, orders, quality, maintenance, reports modules | Planned |
+| Inventory overview and stock movements | Built, tested |
+| Orders, quality, maintenance, reports modules | Planned |
 
 ### Known limitations
 - `sales_data_covered` defaults to `false`; an ingestion process must mark dates covered only after confirming transaction data is complete.

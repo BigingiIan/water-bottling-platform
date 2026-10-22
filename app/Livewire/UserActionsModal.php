@@ -62,24 +62,41 @@ class UserActionsModal extends Component
             'roleId' => ['required', 'integer', Rule::exists('roles', 'id')],
         ]);
 
-        $target = User::query()->findOrFail($validated['targetUserId']);
-        $oldRole = $target->role?->slug ?? 'none';
+        $changed = false;
+        $target = DB::transaction(function () use ($actor, $validated, &$changed): ?User {
+            $this->lockActiveAdministrators();
+            $target = User::query()->lockForUpdate()->findOrFail($validated['targetUserId']);
 
-        if ($target->role_id === $validated['roleId']) {
+            if ($target->role_id === $validated['roleId']) {
+                return $target;
+            }
+
+            if ($this->isLastActiveAdministrator($target)) {
+                $this->addError('roleId', 'The last active Administrator cannot have their role changed.');
+
+                return null;
+            }
+
+            $oldRole = $target->role?->slug ?? 'none';
+            $target->update(['role_id' => $validated['roleId']]);
+            $target->load('role');
+
+            $this->audit($actor, $target, 'user.role_changed', ['role' => $oldRole], ['role' => $target->role?->slug]);
+            $changed = true;
+
+            return $target;
+        });
+
+        if ($target === null) {
+            return;
+        }
+
+        if (! $changed) {
             $this->closeModal();
 
             return;
         }
 
-        if ($this->isLastActiveAdministrator($target)) {
-            $this->addError('roleId', 'The last active Administrator cannot have their role changed.');
-
-            return;
-        }
-
-        $target->update(['role_id' => $validated['roleId']]);
-
-        $this->audit($actor, $target, 'user.role_changed', ['role' => $oldRole], ['role' => $target->fresh()->role?->slug]);
         $this->dispatch('user-changed', userId: $target->id);
         $this->closeModal();
     }
@@ -92,29 +109,45 @@ class UserActionsModal extends Component
             'targetUserId' => ['required', 'integer', Rule::exists('users', 'id')],
         ]);
 
-        $target = User::query()->findOrFail($validated['targetUserId']);
-        $suspending = $target->status !== 'suspended';
+        $target = DB::transaction(function () use ($actor, $validated): ?User {
+            $this->lockActiveAdministrators();
+            $target = User::query()->lockForUpdate()->findOrFail($validated['targetUserId']);
+            $suspending = $target->status !== 'suspended';
 
-        if ($suspending && $actor->is($target)) {
-            $this->addError('suspend', 'You cannot suspend your own account.');
+            if ($suspending && $actor->is($target)) {
+                $this->addError('suspend', 'You cannot suspend your own account.');
 
+                return null;
+            }
+
+            if ($suspending && $this->isLastActiveAdministrator($target)) {
+                $this->addError('suspend', 'The last active Administrator cannot be suspended.');
+
+                return null;
+            }
+
+            $oldStatus = $target->status;
+            $target->update(['status' => $suspending ? 'suspended' : 'active']);
+
+            if ($suspending) {
+                DB::table('sessions')->where('user_id', $target->id)->delete();
+            }
+
+            $this->audit(
+                $actor,
+                $target,
+                $suspending ? 'user.suspended' : 'user.reactivated',
+                ['status' => $oldStatus],
+                ['status' => $target->status],
+            );
+
+            return $target;
+        });
+
+        if ($target === null) {
             return;
         }
 
-        if ($suspending && $this->isLastActiveAdministrator($target)) {
-            $this->addError('suspend', 'The last active Administrator cannot be suspended.');
-
-            return;
-        }
-
-        $oldStatus = $target->status;
-        $target->update(['status' => $suspending ? 'suspended' : 'active']);
-
-        if ($suspending) {
-            DB::table('sessions')->where('user_id', $target->id)->delete();
-        }
-
-        $this->audit($actor, $target, $suspending ? 'user.suspended' : 'user.reactivated', ['status' => $oldStatus], ['status' => $target->status]);
         $this->dispatch('user-changed', userId: $target->id);
         $this->closeModal();
     }
@@ -130,16 +163,25 @@ class UserActionsModal extends Component
         $target = User::query()->findOrFail($validated['targetUserId']);
         $temporaryPassword = Str::random(16);
 
-        $oldFlag = (bool) $target->must_change_password;
+        DB::transaction(function () use ($actor, $target, $temporaryPassword): void {
+            $target = User::query()->lockForUpdate()->findOrFail($target->id);
+            $oldFlag = (bool) $target->must_change_password;
 
-        $target->forceFill([
-            'password_hash' => Hash::make($temporaryPassword),
-            'must_change_password' => true,
-        ])->save();
+            $target->forceFill([
+                'password_hash' => Hash::make($temporaryPassword),
+                'must_change_password' => true,
+            ])->save();
 
-        DB::table('sessions')->where('user_id', $target->id)->delete();
+            DB::table('sessions')->where('user_id', $target->id)->delete();
 
-        $this->audit($actor, $target, 'user.password_reset', ['must_change_password' => $oldFlag], ['must_change_password' => true]);
+            $this->audit(
+                $actor,
+                $target,
+                'user.password_reset',
+                ['password_hash' => '[redacted]', 'must_change_password' => $oldFlag],
+                ['password_hash' => '[redacted]', 'must_change_password' => true],
+            );
+        });
 
         $this->temporaryPassword = $temporaryPassword;
         $this->dispatch('user-changed', userId: $target->id);
@@ -199,6 +241,17 @@ class UserActionsModal extends Component
             ->where('roles.slug', 'administrator')
             ->where('users.status', 'active')
             ->exists();
+    }
+
+    private function lockActiveAdministrators(): void
+    {
+        User::query()
+            ->join('roles', 'roles.id', '=', 'users.role_id')
+            ->where('roles.slug', 'administrator')
+            ->where('users.status', 'active')
+            ->orderBy('users.id')
+            ->lockForUpdate()
+            ->get(['users.id']);
     }
 
     /**

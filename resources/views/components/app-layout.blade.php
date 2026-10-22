@@ -35,7 +35,7 @@
         [
             'label' => 'Inventory',
             'items' => [
-                ['label' => 'Stock Overview', 'module' => 'inventory', 'icon' => '▦', 'href' => '#'],
+                ['label' => 'Stock Overview', 'module' => 'inventory', 'icon' => '▦', 'href' => route('inventory.overview')],
                 ['label' => 'Orders', 'module' => 'orders', 'icon' => '🧾', 'href' => '#'],
             ],
         ],

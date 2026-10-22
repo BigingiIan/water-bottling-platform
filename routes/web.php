@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\PasswordSetController;
 use App\Http\Controllers\UserImpersonationController;
 use App\Livewire\ErrorLogs;
+use App\Livewire\InventoryOverview;
 use App\Livewire\ProductionHistory;
 use App\Livewire\ProductionRuns;
 use App\Livewire\RolePermissionMatrix;
@@ -39,6 +40,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/system/errors', ErrorLogs::class)
         ->middleware('module.access:error-logs')
         ->name('errors.index');
+    Route::get('/inventory', InventoryOverview::class)
+        ->middleware('module.access:inventory')
+        ->name('inventory.overview');
 
     Route::view('/production/schedule', 'production.schedule')
         ->middleware('module.access:production')
