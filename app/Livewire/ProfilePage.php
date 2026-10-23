@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\SettingsService;
 use App\Services\UserPreferenceService;
 use App\Support\ModuleAccess;
+use App\Support\Plural;
 use App\Support\UserAgentParser;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Carbon;
@@ -219,7 +220,7 @@ class ProfilePage extends Component
 
         RateLimiter::clear($this->passwordThrottleKey($user));
         $this->closeLogoutSessionsModal();
-        $this->dispatch('profile-saved', message: "Signed out of {$removedSessions} other ".str('session')->plural($removedSessions).'.');
+        $this->dispatch('profile-saved', message: 'Signed out of '.Plural::count($removedSessions, 'other session').'.');
     }
 
     public function savePreferences(UserPreferenceService $preferences): void

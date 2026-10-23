@@ -148,7 +148,7 @@ class InventoryOverviewTest extends TestCase
             'leakageFlagFilter' => 'Review',
         ])
             ->test(InventoryOverview::class)
-            ->assertSee('1 reports')
+            ->assertSee('1 report<', false)
             ->assertSee('Review')
             ->assertDontSee('6.00%');
     }

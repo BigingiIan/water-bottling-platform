@@ -454,7 +454,7 @@ class InventoryOverview extends Component
             ->when($this->locationFilter !== '', function (Builder $query): void {
                 $query->where('warehouse_location', $this->locationFilter);
             })
-            ->when(in_array($this->statusFilter, ['ok', 'low', 'critical'], true), function (Builder $query) use ($totalsQuery, $criticalPercent): void {
+            ->when(in_array($this->statusFilter, ['ok', 'low', 'critical', 'out'], true), function (Builder $query) use ($totalsQuery, $criticalPercent): void {
                 $query->whereHas('product', function (Builder $productQuery) use ($totalsQuery, $criticalPercent): void {
                     $productQuery->leftJoinSub(
                         clone $totalsQuery,
@@ -467,9 +467,10 @@ class InventoryOverview extends Component
                     $total = 'COALESCE(inventory_totals.total_units, 0)';
 
                     match ($this->statusFilter) {
-                        'critical' => $productQuery->whereRaw("products.reorder_threshold > 0 AND {$total} < products.reorder_threshold * ? / 100", [$criticalPercent]),
-                        'low' => $productQuery->whereRaw("products.reorder_threshold > 0 AND {$total} < products.reorder_threshold AND {$total} >= products.reorder_threshold * ? / 100", [$criticalPercent]),
-                        'ok' => $productQuery->where(function (Builder $query) use ($total): void {
+                        'out' => $productQuery->whereRaw("{$total} <= 0"),
+                        'critical' => $productQuery->whereRaw("{$total} > 0 AND products.reorder_threshold > 0 AND {$total} < products.reorder_threshold * ? / 100", [$criticalPercent]),
+                        'low' => $productQuery->whereRaw("{$total} > 0 AND products.reorder_threshold > 0 AND {$total} < products.reorder_threshold AND {$total} >= products.reorder_threshold * ? / 100", [$criticalPercent]),
+                        'ok' => $productQuery->whereRaw("{$total} > 0")->where(function (Builder $query) use ($total): void {
                             $query->whereNull('products.reorder_threshold')
                                 ->orWhere('products.reorder_threshold', '<=', 0)
                                 ->orWhereRaw("{$total} >= products.reorder_threshold");
@@ -495,11 +496,12 @@ class InventoryOverview extends Component
             ->pluck('warehouse_location');
 
         $attentionProducts = $productCards
-            ->filter(fn (array $card): bool => in_array($card['status'], ['low', 'critical'], true) || $card['coverWarning'])
+            ->filter(fn (array $card): bool => in_array($card['status'], ['low', 'critical', 'out'], true) || $card['coverWarning'])
             ->sortBy(fn (array $card): int => match ($card['status']) {
-                'critical' => 0,
-                'low' => 1,
-                default => 2,
+                'out' => 0,
+                'critical' => 1,
+                'low' => 2,
+                default => 3,
             })
             ->values();
 

@@ -84,3 +84,29 @@ fixed-date national holidays and Good Friday/Easter Monday, and uses a
 month-level term approximation (January-March, May-July, September-November)
 until the generator's exact calendar functions are available. Islamic holidays
 are not inferred because their observed dates are announced separately.
+
+## Dashboard
+
+A Streamlit dashboard reads the saved bundles and metrics files directly and
+calls `predict_sku()` in-process, so there is no HTTP API in between. From the
+`ml` directory:
+
+```powershell
+uv run streamlit run dashboard/app.py
+```
+
+Tabs: Overview (reported accuracy and what is being served), Forecast
+(backtest against actual sales, or forecast beyond the data with an editable
+calendar), Models (comparison against the seasonal naive baseline, with fold
+spread), Stackers (variants and weights) and Folds (per-fold results).
+
+The dashboard looks for `metrics_manifest.json` in `ML_MODEL_DIR`, then
+`saved_models`, then `outputs/saved_models`, and uses the bundles that sit next
+to the metrics it found. Set `DASHBOARD_DATA_CSV` if the source data is not at
+`..\data\kenya_water_demand_daily.csv`. The Forecast tab always shows
+"backtest" results as in-sample, because the final models are refit on every
+day in the data; the honest accuracy is the final_test estimate on Overview.
+
+`uv run pytest tests/test_dashboard_utils.py tests/test_dashboard_app.py`
+checks the forecast helpers and that every tab renders against the saved
+artifacts.

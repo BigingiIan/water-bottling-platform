@@ -26,9 +26,7 @@
         x-on:click="$wire.$toggle('open')"
         class="relative flex size-[34px] items-center justify-center rounded-md bg-gray-100 text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-800"
     >
-        <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" class="size-[18px]">
-            <path d="M15 7a5 5 0 0 0-10 0c0 5-2 5-2 7h14c0-2-2-2-2-7ZM8 17h4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" />
-        </svg>
+        <x-heroicon-o-bell class="size-5" aria-hidden="true" />
         @if ($unreadCount > 0)
             <span aria-hidden="true" class="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
                 {{ $unreadCount > 9 ? '9+' : $unreadCount }}

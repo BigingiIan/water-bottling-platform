@@ -1,20 +1,18 @@
 <div>
-    <div class="mb-5 flex items-end justify-between gap-4">
-        <div>
-            <h1 class="text-[21px] font-extrabold tracking-tight text-gray-900">Production History</h1>
-            <p class="mt-1 text-[13px] text-gray-500">
-                {{ $this->dateFrom }} → {{ $this->dateTo }} · {{ number_format($totalActual) }} / {{ number_format($totalTarget) }} units
-                @if ($totalVariancePct !== null)
-                    ({{ ($totalVariancePct > 0 ? '+' : '').$totalVariancePct }}%)
-                @endif
-            </p>
-        </div>
-        <div class="flex shrink-0 gap-2">
+    @php
+        $settingsDate = app(\App\Support\SettingsDate::class);
+        $historySubtitle = $settingsDate->formatDate($this->dateFrom).' – '.$settingsDate->formatDate($this->dateTo)
+            .' · '.number_format($totalActual).' / '.number_format($totalTarget).' units'
+            .($totalVariancePct !== null ? ' ('.($totalVariancePct > 0 ? '+' : '').$totalVariancePct.'%)' : '');
+    @endphp
+    <x-page-header class="mb-6" title="Production History" :subtitle="$historySubtitle">
+        <x-slot:actions>
             <button type="button" wire:click="exportCsv" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
-                ⬇ Export CSV
+                <x-heroicon-o-arrow-down-tray class="size-4" aria-hidden="true" />
+                Export CSV
             </button>
-        </div>
-    </div>
+        </x-slot:actions>
+    </x-page-header>
 
     <section aria-labelledby="history-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white">
         <h2 id="history-heading" class="sr-only">Production history</h2>
@@ -27,7 +25,7 @@
                 wire:model.live="dateFrom"
                 class="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700"
             >
-            <span aria-hidden="true" class="text-xs text-gray-400">→</span>
+            <x-heroicon-o-arrow-right class="size-4 text-gray-400" aria-hidden="true" />
             <label class="sr-only" for="history-date-to">To date</label>
             <input
                 id="history-date-to"
@@ -55,7 +53,7 @@
                 <option value="passed">Quality: Passed</option>
                 <option value="flagged">Quality: Flagged</option>
             </select>
-            <p class="ml-auto text-xs text-gray-500">{{ $schedules->count() }} jobs</p>
+            <p class="ml-auto text-xs text-gray-500">{{ \App\Support\Plural::count($schedules->count(), 'job') }}</p>
         </div>
 
         <div class="overflow-x-auto">

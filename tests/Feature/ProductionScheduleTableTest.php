@@ -139,11 +139,11 @@ class ProductionScheduleTableTest extends TestCase
         ]);
 
         Livewire::test(ProductionScheduleTable::class)
-            ->assertSee('5L')
-            ->assertDontSee('20L')
+            ->assertSeeText('5L')
+            ->assertDontSeeText('20L')
             ->set('selectedDate', $tomorrow)
-            ->assertSee('20L')
-            ->assertDontSee('5L');
+            ->assertSeeText('20L')
+            ->assertDontSeeText('5L');
     }
 
     public function test_schedule_route_renders_livewire_table_with_real_data(): void

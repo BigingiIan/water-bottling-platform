@@ -345,7 +345,7 @@ class RolePermissionMatrixTest extends TestCase
 
         $component->call('deleteRole')
             ->assertSet('showDeleteRoleModal', true)
-            ->assertSee('1 users still have the role \'Quality Lead\'. Reassign them before deleting it.', false)
+            ->assertSee('1 user still has the role \'Quality Lead\'. Reassign them before deleting it.', false)
             ->assertSee('role="alert"', false);
 
         $this->assertModelExists($role);

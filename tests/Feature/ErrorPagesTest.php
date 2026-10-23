@@ -79,14 +79,17 @@ class ErrorPagesTest extends TestCase
             ->assertForbidden()
             ->assertSee('This action needs full access')
             ->assertSee('Inventory · your access: View only')
-            ->assertSee('← Back to Home');
+            ->assertSee('Back to Home')
+            ->assertSee('action="'.route('access-requests.store').'"', false)
+            ->assertSee('name="module" value="inventory"', false);
     }
 
     public function test_missing_page_renders_generic_not_found_without_module_context(): void
     {
         $this->get('/page-that-does-not-exist')
             ->assertNotFound()
-            ->assertSee('🧭')
+            ->assertSee('<div class="error-badge badge-blue" aria-hidden="true"><svg', false)
+            ->assertDontSee('🧭')
             ->assertSee("This page doesn't exist")
             ->assertSee('Back to Dashboard')
             ->assertSee('Go Back')

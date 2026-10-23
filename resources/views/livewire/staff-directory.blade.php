@@ -1,23 +1,20 @@
-<section aria-labelledby="staff-directory-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-    <div class="flex items-center justify-between gap-4 border-b border-gray-100 px-[18px] py-4">
-        <div>
-            <h1 id="staff-directory-heading" class="text-[15px] font-bold text-gray-900">Staff Directory</h1>
-            <p class="mt-0.5 text-xs text-gray-500">{{ $users->total() }} users</p>
-        </div>
-        <div class="flex shrink-0 gap-2">
+<div class="flex flex-col gap-6">
+    <x-page-header heading-id="staff-directory-heading" title="Staff Directory" :subtitle="\App\Support\Plural::count($users->total(), 'user')">
+        <x-slot:actions>
+            <button type="button" wire:click="exportCsv" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
+                <x-heroicon-o-arrow-down-tray class="size-4" aria-hidden="true" />
+                Export CSV
+            </button>
             @if ($canInvite)
-                <button type="button" wire:click="$dispatch('open-invite-modal')" class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
-                    + Invite User
+                <button type="button" wire:click="$dispatch('open-invite-modal')" class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700">
+                    <x-heroicon-o-plus class="size-4" aria-hidden="true" />
+                    Invite User
                 </button>
             @endif
-            <button type="button" class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
-                Export
-            </button>
-            <button type="button" class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
-                <span aria-hidden="true">⚙</span> Columns
-            </button>
-        </div>
-    </div>
+        </x-slot:actions>
+    </x-page-header>
+
+    <section aria-labelledby="staff-directory-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
 
     <div class="flex flex-wrap gap-2 border-b border-gray-100 bg-gray-50 px-[18px] py-3">
         <input
@@ -56,7 +53,7 @@
                     <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Role</th>
                     <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Status</th>
                     <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Modules</th>
-                    <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Last Active</th>
+                    <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] whitespace-nowrap text-gray-500">Last Active</th>
                     <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5"><span class="sr-only">Actions</span></th>
                 </tr>
             </thead>
@@ -92,7 +89,7 @@
                             </div>
                         </td>
                         <td class="border-b border-gray-100 px-[18px] py-3">
-                            <span @class(['inline-block rounded px-2.5 py-[3px] text-[11px] font-bold', $roleStyles['class']])>
+                            <span @class(['inline-block whitespace-nowrap rounded px-2.5 py-[3px] text-[11px] font-bold', $roleStyles['class']])>
                                 {{ $member->role->name }}
                             </span>
                         </td>
@@ -102,8 +99,8 @@
                                 {{ $statusStyles['label'] }}
                             </span>
                         </td>
-                        <td class="border-b border-gray-100 px-[18px] py-3 font-mono text-xs text-gray-700">{{ $accessibleModules ?: '—' }}</td>
-                        <td class="border-b border-gray-100 px-[18px] py-3 text-[13px] text-gray-700">{{ $member->last_active_at?->diffForHumans() ?? '—' }}</td>
+                        <td class="border-b border-gray-100 px-[18px] py-3 text-xs leading-5 text-gray-600">{{ $accessibleModules ?: '—' }}</td>
+                        <td class="whitespace-nowrap border-b border-gray-100 px-[18px] py-3 text-[13px] text-gray-700">{{ $member->last_active_at?->diffForHumans() ?? '—' }}</td>
                         <td class="border-b border-gray-100 px-[18px] py-3">
                             @if ($canInvite)
                                 <div class="relative flex justify-end">
@@ -112,8 +109,8 @@
                                         wire:click="toggleMenu({{ $member->id }})"
                                         aria-label="Actions for {{ $member->name }}"
                                         aria-expanded="{{ $openMenuUserId === $member->id ? 'true' : 'false' }}"
-                                        class="flex size-7 items-center justify-center rounded-md text-[12.5px] text-gray-500 hover:bg-gray-100"
-                                    >⋯</button>
+                                        class="flex size-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"
+                                    ><x-heroicon-o-ellipsis-horizontal class="size-5" aria-hidden="true" /></button>
                                     @if ($openMenuUserId === $member->id)
                                         <div role="menu" aria-label="Actions for {{ $member->name }}" class="absolute right-0 top-8 z-20 w-44 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg">
                                             <button type="button" role="menuitem" wire:click="$dispatch('open-role-modal', { userId: {{ $member->id }} })" class="block w-full px-3.5 py-2 text-left text-[13px] text-gray-700 hover:bg-gray-50">Change role</button>
@@ -135,7 +132,7 @@
     </div>
 
     <nav aria-label="Staff directory pagination" class="flex items-center justify-between border-t border-gray-100 px-[18px] py-3">
-        <p class="text-xs text-gray-500">Showing {{ $users->firstItem() ?? 0 }}–{{ $users->lastItem() ?? 0 }} of {{ $users->total() }} users</p>
+        <p class="text-xs text-gray-500">Showing {{ $users->firstItem() ?? 0 }}–{{ $users->lastItem() ?? 0 }} of {{ \App\Support\Plural::count($users->total(), 'user') }}</p>
         <div class="flex gap-1.5">
             <button
                 type="button"
@@ -143,7 +140,7 @@
                 wire:click="previousPage"
                 @disabled($users->onFirstPage())
                 class="flex size-7 items-center justify-center rounded-md border border-gray-300 bg-white text-xs text-gray-600 disabled:cursor-not-allowed disabled:text-gray-400"
-            >‹</button>
+            ><x-heroicon-o-chevron-left class="size-4" aria-hidden="true" /></button>
             @php
                 $visiblePages = collect([1, $users->currentPage() - 1, $users->currentPage(), $users->currentPage() + 1, $users->lastPage()])
                     ->filter(fn ($page) => $page >= 1 && $page <= $users->lastPage())
@@ -177,11 +174,12 @@
                 wire:click="nextPage"
                 @disabled(! $users->hasMorePages())
                 class="flex size-7 items-center justify-center rounded-md border border-gray-300 bg-white text-xs text-gray-600 disabled:cursor-not-allowed disabled:text-gray-400"
-            >›</button>
+            ><x-heroicon-o-chevron-right class="size-4" aria-hidden="true" /></button>
         </div>
     </nav>
 
     <livewire:invite-user-modal />
 
     <livewire:user-actions-modal />
-</section>
+    </section>
+</div>

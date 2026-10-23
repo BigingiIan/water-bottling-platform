@@ -1,6 +1,5 @@
-<section
-    aria-labelledby="permission-matrix-heading"
-    class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+<div
+    class="flex flex-col gap-6"
     x-data
     x-on:role-deleted.window="$refs.toastMessage.textContent = $event.detail.message; $refs.toast.hidden = false; setTimeout(() => $refs.toast.hidden = true, 4000)"
     x-on:role-delete-modal-closed.window="$nextTick(() => document.getElementById('delete-role-' + $event.detail.roleId)?.focus())"
@@ -9,21 +8,22 @@
         <span x-ref="toastMessage"></span>
     </div>
 
-    <div class="flex items-center justify-between gap-4 border-b border-gray-100 px-[18px] py-4">
-        <div>
-            <h1 id="permission-matrix-heading" class="text-[15px] font-bold text-gray-900">Module Access by Role</h1>
-            <p class="mt-0.5 text-xs text-gray-500">Toggle module-level access per role</p>
-        </div>
+    <x-page-header heading-id="permission-matrix-heading" title="Roles & Permissions" subtitle="Toggle module-level access per role.">
         @if ($canManageRoles)
-            <button
-                type="button"
-                wire:click="openCreateRoleModal"
-                class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700"
-            >
-                + New Role
-            </button>
+            <x-slot:actions>
+                <button
+                    type="button"
+                    wire:click="openCreateRoleModal"
+                    class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-blue-700"
+                >
+                    <x-heroicon-o-plus class="size-4" aria-hidden="true" />
+                    New Role
+                </button>
+            </x-slot:actions>
         @endif
-    </div>
+    </x-page-header>
+
+    <section aria-labelledby="permission-matrix-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
 
     @error('roleAction')
         <p role="alert" class="border-b border-red-100 bg-red-50 px-[18px] py-2.5 text-sm text-red-700">{{ $message }}</p>
@@ -257,7 +257,7 @@
                 @if ($deletingRole->isSystemRole())
                     <p class="mt-4 text-sm text-gray-700">'{{ $deletingRole->name }}' is a system role and cannot be deleted.</p>
                 @elseif ($deletingRole->users_count > 0)
-                    <p class="mt-4 text-sm text-gray-700">{{ $deletingRole->users_count }} users still have the role '{{ $deletingRole->name }}'. Reassign them before deleting it.</p>
+                    <p class="mt-4 text-sm text-gray-700">{{ \App\Support\Plural::count($deletingRole->users_count, 'user') }} still {{ $deletingRole->users_count === 1 ? 'has' : 'have' }} the role '{{ $deletingRole->name }}'. Reassign them before deleting it.</p>
                     <ul class="mt-3 list-inside list-disc text-sm text-gray-600">
                         @foreach ($deletingRoleUsers as $userName)
                             <li>{{ $userName }}</li>
@@ -311,4 +311,5 @@
             </section>
         </div>
     @endif
-</section>
+    </section>
+</div>

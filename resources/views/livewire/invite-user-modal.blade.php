@@ -4,7 +4,7 @@
         <div role="dialog" aria-modal="true" aria-labelledby="invite-modal-heading" class="w-full max-w-[440px] overflow-hidden rounded-[10px] bg-white shadow-xl">
             <div class="flex items-center justify-between border-b border-gray-200 px-5 py-4">
                 <h3 id="invite-modal-heading" class="text-[15px] font-bold text-gray-900">Invite User</h3>
-                <button type="button" wire:click="closeModal" aria-label="Close invite user dialog" class="text-base text-gray-400 hover:text-gray-600">✕</button>
+                <button type="button" wire:click="closeModal" aria-label="Close invite user dialog" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><x-heroicon-o-x-mark class="size-5" aria-hidden="true" /></button>
             </div>
             <div class="px-5 py-[18px]">
                 @if ($temporaryPassword !== null)

@@ -1,9 +1,12 @@
 <?php
 
+use App\Http\Controllers\AccessRequestController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\PasswordSetController;
 use App\Http\Controllers\UserImpersonationController;
+use App\Livewire\Dashboard;
 use App\Livewire\ErrorLogs;
+use App\Livewire\ForecastingPage;
 use App\Livewire\InventoryOverview;
 use App\Livewire\NotificationsPage;
 use App\Livewire\ProductionHistory;
@@ -31,9 +34,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/impersonation/return', [UserImpersonationController::class, 'destroy'])
         ->name('impersonation.destroy');
 
-    Route::view('/dashboard', 'dashboard')
+    Route::get('/dashboard', Dashboard::class)
         ->middleware('module.access:dashboard')
         ->name('dashboard');
+    Route::get('/forecasting', ForecastingPage::class)
+        ->middleware('module.access:forecasting')
+        ->name('forecasting.index');
     Route::get('/staff', StaffDirectory::class)
         ->middleware('module.access:users-roles')
         ->name('staff.directory');
@@ -51,6 +57,7 @@ Route::middleware('auth')->group(function () {
         ->name('audit-logs.redirect');
     Route::get('/notifications', NotificationsPage::class)->name('notifications.index');
     Route::get('/profile', ProfilePage::class)->name('profile.show');
+    Route::post('/access-requests', [AccessRequestController::class, 'store'])->name('access-requests.store');
     Route::get('/inventory', InventoryOverview::class)
         ->middleware('module.access:inventory')
         ->name('inventory.overview');

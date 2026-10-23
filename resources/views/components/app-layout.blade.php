@@ -21,38 +21,38 @@
         [
             'label' => null,
             'items' => [
-                ['label' => 'Dashboard', 'module' => 'dashboard', 'alwaysVisible' => true, 'icon' => '▣', 'href' => route('dashboard')],
+                ['label' => 'Dashboard', 'module' => 'dashboard', 'alwaysVisible' => true, 'icon' => 'squares-2x2', 'href' => route('dashboard')],
             ],
         ],
         [
             'label' => 'Production',
             'items' => [
-                ['label' => 'Schedule', 'module' => 'production', 'icon' => '⚙', 'href' => route('production.schedule')],
-                ['label' => 'Production Runs', 'module' => 'production', 'icon' => '📦', 'href' => route('production.runs')],
-                ['label' => 'History', 'module' => 'production', 'icon' => '🕘', 'href' => route('production.history')],
+                ['label' => 'Schedule', 'module' => 'production', 'icon' => 'calendar-days', 'href' => route('production.schedule')],
+                ['label' => 'Production Runs', 'module' => 'production', 'icon' => 'play-circle', 'href' => route('production.runs')],
+                ['label' => 'History', 'module' => 'production', 'icon' => 'clock', 'href' => route('production.history')],
             ],
         ],
         [
             'label' => 'Inventory',
             'items' => [
-                ['label' => 'Stock Overview', 'module' => 'inventory', 'icon' => '▦', 'href' => route('inventory.overview')],
-                ['label' => 'Orders', 'module' => 'orders', 'icon' => '🧾', 'href' => '#'],
+                ['label' => 'Stock Overview', 'module' => 'inventory', 'icon' => 'archive-box', 'href' => route('inventory.overview')],
+                ['label' => 'Orders', 'module' => 'orders', 'icon' => 'clipboard-document-list', 'href' => '#'],
             ],
         ],
         [
             'label' => 'Analytics',
             'items' => [
-                ['label' => 'Forecasting', 'module' => 'forecasting', 'icon' => '📈', 'href' => '#'],
-                ['label' => 'Reports', 'module' => 'reports', 'icon' => '📊', 'href' => '#'],
+                ['label' => 'Forecasting', 'module' => 'forecasting', 'icon' => 'presentation-chart-line', 'href' => route('forecasting.index')],
+                ['label' => 'Reports', 'module' => 'reports', 'icon' => 'chart-bar', 'href' => '#'],
             ],
         ],
         [
             'label' => 'System',
             'items' => [
-                ['label' => 'Users & Roles', 'module' => 'users-roles', 'icon' => '🛡', 'href' => route('staff.directory')],
-                ['label' => 'Roles & Permissions', 'module' => 'users-roles', 'requiredAccess' => 'full', 'icon' => '🔐', 'href' => route('staff.permissions')],
-                ['label' => 'Error Logs', 'module' => 'error-logs', 'icon' => '⚠', 'href' => route('errors.index')],
-                ['label' => 'Settings', 'module' => 'settings', 'icon' => '⚙', 'href' => route('settings.index')],
+                ['label' => 'Users & Roles', 'module' => 'users-roles', 'icon' => 'users', 'href' => route('staff.directory')],
+                ['label' => 'Roles & Permissions', 'module' => 'users-roles', 'requiredAccess' => 'full', 'icon' => 'shield-check', 'href' => route('staff.permissions')],
+                ['label' => 'Error Logs', 'module' => 'error-logs', 'icon' => 'exclamation-triangle', 'href' => route('errors.index')],
+                ['label' => 'Settings', 'module' => 'settings', 'icon' => 'cog-6-tooth', 'href' => route('settings.index')],
             ],
         ],
     ];
@@ -90,7 +90,7 @@
         <div class="flex min-h-screen">
             <aside class="sticky top-0 flex h-screen w-[248px] shrink-0 flex-col bg-navy-950 py-5 text-gray-300">
                 <a href="/" class="mb-4 flex items-center gap-2.5 border-b border-white/[0.08] px-5 pb-[22px]">
-                    <span class="flex size-8 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-blue-500 to-teal-500 text-base" aria-hidden="true">💧</span>
+                    <x-brand-mark />
                     <span>
                         <span class="block text-[15px] font-extrabold tracking-[0.2px] text-white">AquaOps</span>
                         <span class="block text-[10.5px] font-medium uppercase tracking-[0.4px] text-gray-400">Operations Console</span>
@@ -116,7 +116,7 @@
                                             'bg-blue-500/15 text-white before:absolute before:-left-3 before:inset-y-1.5 before:w-[3px] before:rounded-r before:bg-blue-500' => $navigationItem['active'],
                                         ])
                                     >
-                                        <span class="w-4 shrink-0 text-center" aria-hidden="true">{{ $navigationItem['icon'] }}</span>
+                                        <x-dynamic-component :component="'heroicon-o-'.$navigationItem['icon']" class="size-5 shrink-0" aria-hidden="true" />
                                         <span>{{ $navigationItem['label'] }}</span>
                                     </a>
                                 @endforeach
@@ -146,32 +146,6 @@
                         </nav>
 
                         <div class="flex items-center gap-3.5">
-                            @if ($canImpersonate)
-                                <form method="POST" action="{{ route('impersonation.store') }}" class="flex items-center gap-2">
-                                    @csrf
-                                    <label for="view-as-user" class="sr-only">View as user</label>
-                                    <select id="view-as-user" name="user_id" required class="max-w-48 rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs text-gray-700">
-                                        <option value="" selected disabled>View As…</option>
-                                        @foreach ($impersonationUsers as $impersonationUser)
-                                            <option value="{{ $impersonationUser->id }}">
-                                                {{ $impersonationUser->name }} — {{ $impersonationUser->role->name }}
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                    <button type="submit" @disabled($impersonationUsers->isEmpty()) class="text-xs font-semibold text-blue-700 transition-colors hover:text-blue-900 disabled:cursor-not-allowed disabled:text-gray-400">
-                                        View As
-                                    </button>
-                                </form>
-                            @endif
-
-                            <label class="flex w-[220px] items-center gap-2 rounded-md bg-gray-100 px-3 py-[7px] text-gray-400">
-                                <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" class="size-4 shrink-0">
-                                    <circle cx="8.75" cy="8.75" r="5.75" stroke="currentColor" stroke-width="1.5" />
-                                    <path d="m13 13 4 4" stroke="currentColor" stroke-linecap="round" stroke-width="1.5" />
-                                </svg>
-                                <input type="search" placeholder="Search users, roles…" class="min-w-0 flex-1 bg-transparent text-[13px] text-gray-700 outline-none placeholder:text-gray-400">
-                            </label>
-
                             @auth
                                 <livewire:notification-bell />
                             @endauth
@@ -223,13 +197,40 @@
                                             </div>
                                         @endif
 
+                                        @if ($canImpersonate)
+                                            <form method="POST" action="{{ route('impersonation.store') }}" class="border-b border-gray-100 px-4 py-3">
+                                                @csrf
+                                                <label for="view-as-user" class="flex items-center gap-1.5 text-xs font-semibold text-gray-700">
+                                                    <x-heroicon-o-eye class="size-4 text-gray-400" aria-hidden="true" />
+                                                    View as another user
+                                                </label>
+                                                <div class="mt-2 flex items-center gap-2">
+                                                    <select id="view-as-user" name="user_id" required class="min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-xs text-gray-700">
+                                                        <option value="" selected disabled>Choose a user…</option>
+                                                        @foreach ($impersonationUsers as $impersonationUser)
+                                                            <option value="{{ $impersonationUser->id }}">
+                                                                {{ $impersonationUser->name }} — {{ $impersonationUser->role->name }}
+                                                            </option>
+                                                        @endforeach
+                                                    </select>
+                                                    <button type="submit" @disabled($impersonationUsers->isEmpty()) class="shrink-0 rounded-md bg-blue-600 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-300">
+                                                        View As
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        @endif
+
                                         <ul class="py-1.5 text-[13px] text-gray-700">
                                             <li>
-                                                <a href="{{ route('profile.show') }}" class="flex items-center px-4 py-2 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">My Profile</a>
+                                                <a href="{{ route('profile.show') }}" class="flex items-center gap-2.5 px-4 py-2 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">
+                                                    <x-heroicon-o-user-circle class="size-5 text-gray-400" aria-hidden="true" />
+                                                    My Profile
+                                                </a>
                                             </li>
                                             <li>
-                                                <a href="{{ route('notifications.index') }}" class="flex items-center justify-between px-4 py-2 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">
-                                                    <span>Notifications</span>
+                                                <a href="{{ route('notifications.index') }}" class="flex items-center gap-2.5 px-4 py-2 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">
+                                                    <x-heroicon-o-bell class="size-5 text-gray-400" aria-hidden="true" />
+                                                    <span class="flex-1">Notifications</span>
                                                     @if ($unreadNotificationCount > 0)
                                                         <span class="inline-flex min-w-5 justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
                                                             {{ $unreadNotificationCount > 9 ? '9+' : $unreadNotificationCount }}
@@ -241,7 +242,10 @@
                                             <li class="border-t border-gray-100 pt-1.5 mt-1.5">
                                                 <form method="POST" action="{{ route('logout') }}">
                                                     @csrf
-                                                    <button type="submit" class="flex w-full items-center px-4 py-2 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">Sign out</button>
+                                                    <button type="submit" class="flex w-full items-center gap-2.5 px-4 py-2 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">
+                                                        <x-heroicon-o-arrow-right-start-on-rectangle class="size-5 text-gray-400" aria-hidden="true" />
+                                                        Sign out
+                                                    </button>
                                                 </form>
                                             </li>
                                         </ul>
@@ -272,6 +276,12 @@
                 </header>
 
                 <main class="min-h-0 flex-1 p-6 sm:px-7 sm:pb-10">
+                    @if (session('status'))
+                        <p role="status" class="mb-6 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-800">
+                            <x-heroicon-o-check-circle class="size-5 shrink-0" aria-hidden="true" />
+                            {{ session('status') }}
+                        </p>
+                    @endif
                     {{ $slot }}
                 </main>
             </div>

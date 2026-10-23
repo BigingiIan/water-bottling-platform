@@ -16,10 +16,12 @@ class ForecastRecord extends Model
         'horizon_days',
         'model_version',
         'rmse_score',
+        'generated_at',
     ];
 
     protected $casts = [
         'forecast_date' => 'date',
+        'generated_at' => 'datetime',
     ];
 
     public function product(): BelongsTo

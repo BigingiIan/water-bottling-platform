@@ -3,18 +3,20 @@
         <p role="status" class="rounded-md border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-800">{{ session('inventorySuccess') }}</p>
     @endif
 
-    <header class="flex flex-wrap items-end justify-between gap-3">
-        <div>
-            <h1 class="text-[21px] font-extrabold tracking-tight text-gray-900">Inventory</h1>
-            <p class="mt-1 text-[13px] text-gray-500">Production, leakage, and stock activity.</p>
-        </div>
+    <x-page-header title="Inventory" subtitle="Production, leakage, and stock activity.">
         @if ($canWriteInventory && $activeTab === 'stock')
-            <div class="flex gap-2">
-                <button type="button" wire:click="openAdjustmentModal" class="rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">Adjust Stock</button>
-                <button type="button" wire:click="openStockInModal" class="rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700">+ Record Stock-In</button>
-            </div>
+            <x-slot:actions>
+                <button type="button" wire:click="openAdjustmentModal" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
+                    <x-heroicon-o-adjustments-horizontal class="size-4" aria-hidden="true" />
+                    Adjust Stock
+                </button>
+                <button type="button" wire:click="openStockInModal" class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700">
+                    <x-heroicon-o-plus class="size-4" aria-hidden="true" />
+                    Record Stock-In
+                </button>
+            </x-slot:actions>
         @endif
-    </header>
+    </x-page-header>
 
     <nav aria-label="Inventory sections" class="flex flex-wrap gap-1 border-b border-gray-200">
         <button type="button" wire:click="$set('activeTab', 'stock')" @class(['border-b-2 px-3 py-2.5 text-[13px] font-semibold', 'border-blue-600 text-blue-700' => $activeTab === 'stock', 'border-transparent text-gray-500 hover:text-gray-800' => $activeTab !== 'stock']) @if ($activeTab === 'stock') aria-current="page" @endif>Stock Overview</button>
@@ -37,18 +39,8 @@
             @php
                 $product = $card['product'];
                 $status = $card['status'];
-                $badgeClass = match ($status) {
-                    'critical' => 'bg-red-50 text-[#b91c1c]',
-                    'low' => 'bg-amber-50 text-[#b45309]',
-                    default => 'bg-green-50 text-[#15803d]',
-                };
-                $dotClass = match ($status) {
-                    'critical' => 'bg-red-500',
-                    'low' => 'bg-amber-500',
-                    default => 'bg-green-500',
-                };
                 $coverFillClass = match ($status) {
-                    'critical' => 'bg-red-500',
+                    'out', 'critical' => 'bg-red-500',
                     'low' => 'bg-amber-500',
                     default => 'bg-green-500',
                 };
@@ -56,15 +48,13 @@
             @endphp
             <article @class([
                 'min-w-0 rounded-lg border bg-white p-4',
-                'border-red-500' => $status === 'critical',
+                'border-red-500' => in_array($status, ['critical', 'out'], true),
                 'border-amber-500' => $status === 'low',
                 'border-gray-200' => $status === 'ok',
             ])>
                 <div class="mb-2.5 flex items-center justify-between gap-2">
                     <span class="rounded bg-teal-50 px-2.5 py-[3px] text-[11px] font-bold text-[#0f766e]">{{ $product->unit_type }}</span>
-                    <span class="inline-flex items-center gap-[5px] rounded-full px-[9px] py-[3px] text-[11px] font-bold {{ $badgeClass }}">
-                        <span aria-hidden="true" class="size-1.5 rounded-full {{ $dotClass }}"></span>{{ ucfirst($status) }}
-                    </span>
+                    <x-stock-status-badge :status="$status" />
                 </div>
                 <h2 class="truncate text-sm font-semibold text-gray-700">{{ $product->name }}</h2>
                 <p class="mt-1 text-2xl font-extrabold tabular-nums text-gray-900">
@@ -120,8 +110,9 @@
                 <option value="ok">OK</option>
                 <option value="low">Low</option>
                 <option value="critical">Critical</option>
+                <option value="out">Out of stock</option>
             </select>
-            <span class="ml-auto text-xs text-gray-500">{{ $stockLines->count() }} stock lines</span>
+            <span class="ml-auto text-xs text-gray-500">{{ \App\Support\Plural::count($stockLines->count(), 'stock line') }}</span>
         </form>
         <div class="overflow-x-auto">
             <table class="w-full min-w-[800px] border-collapse text-left">
@@ -148,16 +139,6 @@
                             $lineFill = min(100, $lineLevel / $lineScale * 100);
                             $minimumMark = min(100, $lineMinimum / $lineScale * 100);
                             $status = $statusByProduct[$stockLine->product_id]['status'] ?? 'ok';
-                            $badgeClass = match ($status) {
-                                'critical' => 'bg-red-50 text-[#b91c1c]',
-                                'low' => 'bg-amber-50 text-[#b45309]',
-                                default => 'bg-green-50 text-[#15803d]',
-                            };
-                            $dotClass = match ($status) {
-                                'critical' => 'bg-red-500',
-                                'low' => 'bg-amber-500',
-                                default => 'bg-green-500',
-                            };
                         @endphp
                         <tr wire:key="stock-line-{{ $stockLine->id }}" class="transition-colors hover:bg-gray-50">
                             <td class="border-b border-gray-100 px-[18px] py-3">
@@ -175,9 +156,7 @@
                                 </div>
                             </td>
                             <td class="border-b border-gray-100 px-[18px] py-3">
-                                <span class="inline-flex items-center gap-[5px] rounded-full px-[9px] py-[3px] text-[11px] font-bold {{ $badgeClass }}">
-                                    <span aria-hidden="true" class="size-1.5 rounded-full {{ $dotClass }}"></span>{{ ucfirst($status) }}
-                                </span>
+                                <x-stock-status-badge :status="$status" />
                             </td>
                             <td class="border-b border-gray-100 px-[18px] py-3 text-xs text-gray-500">{{ app(\App\Support\SettingsDate::class)->formatDateTime($stockLine->last_updated) }}</td>
                             @if ($canWriteInventory)
@@ -203,7 +182,7 @@
             @forelse ($attentionProducts as $card)
                 @php
                     $product = $card['product'];
-                    $critical = $card['status'] === 'critical';
+                    $critical = in_array($card['status'], ['critical', 'out'], true);
                     $suggestedUnits = $card['forecastDemand'] !== null
                         ? (int) (ceil($card['forecastDemand'] / 10) * 10)
                         : null;
@@ -211,14 +190,14 @@
                 <article wire:key="attention-{{ $product->id }}" class="flex items-start gap-3 border-b border-gray-100 px-[18px] py-3.5 last:border-b-0">
                     <span aria-hidden="true" class="mt-1.5 size-[7px] shrink-0 rounded-full {{ $critical ? 'bg-red-500' : 'bg-amber-500' }}"></span>
                     <div class="min-w-0 flex-1">
-                        <p class="text-[12.5px] text-gray-700"><strong class="text-gray-900">{{ $product->unit_type }}</strong> · {{ $card['coverWarning'] && $card['status'] === 'ok' ? 'Low forecast cover' : ucfirst($card['status']) }} at {{ number_format($card['totalUnits']) }} units</p>
+                        <p class="text-[12.5px] text-gray-700"><strong class="text-gray-900">{{ $product->unit_type }}</strong> · {{ $card['coverWarning'] && $card['status'] === 'ok' ? 'Low forecast cover' : match ($card['status']) { 'out' => 'Out of stock', 'critical' => 'Critical', default => 'Low' } }} at {{ \App\Support\Plural::count($card['totalUnits'], 'unit') }}</p>
                         <p class="mt-0.5 text-[11px] text-gray-500">
                             Cover: {{ ! $forecastEnabled ? 'Disabled in Settings' : ($card['coverDays'] === null ? 'No forecast' : number_format($card['coverDays'], 1).' days') }}
                             @if ($forecastEnabled)
                                 · Suggested run: {{ $suggestedUnits === null ? 'No forecast' : number_format($suggestedUnits).' units' }}
                             @endif
                         </p>
-                        <a href="{{ route('production.schedule', ['sku' => $product->unit_type]) }}" class="mt-1.5 inline-flex text-xs font-semibold text-blue-700 hover:text-blue-800">Plan a run <span aria-hidden="true" class="ml-1">→</span></a>
+                        <a href="{{ route('production.schedule', ['sku' => $product->unit_type]) }}" class="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-800">Plan a run <x-heroicon-o-arrow-right class="size-3.5" aria-hidden="true" /></a>
                     </div>
                 </article>
             @empty
@@ -233,7 +212,7 @@
             </div>
             @forelse ($recentMovements as $movement)
                 <article wire:key="movement-{{ $movement->id }}" class="flex items-start gap-3 border-b border-gray-100 px-[18px] py-3.5 last:border-b-0">
-                    <span aria-hidden="true" class="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full {{ $movement->quantity_change < 0 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700' }}">{{ $movement->quantity_change < 0 ? '−' : '+' }}</span>
+                    <span aria-hidden="true" class="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full {{ $movement->quantity_change < 0 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700' }}">@if ($movement->quantity_change < 0)<x-heroicon-o-minus class="size-4" />@else<x-heroicon-o-plus class="size-4" />@endif</span>
                     <div class="min-w-0 flex-1">
                         <p class="text-[12.5px] text-gray-700"><strong class="text-gray-900">{{ $movement->product?->unit_type ?? 'Product' }}</strong> · {{ str_replace('_', ' ', ucfirst($movement->type)) }}</p>
                         <p class="mt-0.5 text-[11px] text-gray-500">
@@ -320,7 +299,7 @@
                     <p class="mt-0.5 text-xs text-gray-500">Discrepancy is calculated from expected and actual volumes.</p>
                 </div>
                 @if ($canWriteInventory)
-                    <button type="button" wire:click="openLeakageReportModal" class="rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700">+ New Report</button>
+                    <button type="button" wire:click="openLeakageReportModal" class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700"><x-heroicon-o-plus class="size-4" aria-hidden="true" />New Report</button>
                 @endif
             </div>
             <div class="flex flex-wrap items-center gap-2 border-b border-gray-100 bg-gray-50 px-[18px] py-3">
@@ -331,7 +310,7 @@
                     <option value="Review">Review</option>
                     <option value="Investigate">Investigate</option>
                 </select>
-                <span class="ml-auto text-xs text-gray-500">{{ $leakageReports->total() }} reports</span>
+                <span class="ml-auto text-xs text-gray-500">{{ \App\Support\Plural::count($leakageReports->total(), 'report') }}</span>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full min-w-[800px] border-collapse text-left">
@@ -457,7 +436,7 @@
             <section role="dialog" aria-modal="true" aria-labelledby="adjust-stock-heading" class="w-full max-w-[460px] overflow-hidden rounded-[10px] bg-white shadow-xl">
                 <div class="flex items-center justify-between border-b border-gray-200 px-5 py-4">
                     <h2 id="adjust-stock-heading" class="text-[15px] font-bold text-gray-900">Adjust Stock</h2>
-                    <button type="button" wire:click="closeAdjustmentModal" aria-label="Close adjustment dialog" class="text-base text-gray-400 hover:text-gray-600">✕</button>
+                    <button type="button" wire:click="closeAdjustmentModal" aria-label="Close adjustment dialog" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><x-heroicon-o-x-mark class="size-5" aria-hidden="true" /></button>
                 </div>
                 <div class="flex flex-col gap-3.5 px-5 py-[18px]">
                     <div>
@@ -489,8 +468,12 @@
                     </div>
                     <div>
                         <div class="flex items-center justify-between gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-600">
-                            <span>Level before → after</span>
-                            <span class="font-mono text-sm font-bold text-gray-900">{{ $previewBefore === null ? '—' : number_format($previewBefore) }} → {{ $previewAfter === null ? '—' : number_format($previewAfter) }}</span>
+                            <span>Level before and after</span>
+                            <span class="inline-flex items-center gap-1.5 font-mono text-sm font-bold text-gray-900">
+                                {{ $previewBefore === null ? '—' : number_format($previewBefore) }}
+                                <x-heroicon-o-arrow-right class="size-4 text-gray-400" aria-label="to" />
+                                {{ $previewAfter === null ? '—' : number_format($previewAfter) }}
+                            </span>
                         </div>
                         <p class="mt-1 text-[11px] text-gray-500">Use a negative number to remove stock.</p>
                     </div>
@@ -513,7 +496,7 @@
             <section role="dialog" aria-modal="true" aria-labelledby="leakage-report-heading" class="w-full max-w-[460px] overflow-hidden rounded-[10px] bg-white shadow-xl">
                 <div class="flex items-center justify-between border-b border-gray-200 px-5 py-4">
                     <h2 id="leakage-report-heading" class="text-[15px] font-bold text-gray-900">New Leakage Report</h2>
-                    <button type="button" wire:click="closeLeakageReportModal" aria-label="Close leakage report dialog" class="text-base text-gray-400 hover:text-gray-600">✕</button>
+                    <button type="button" wire:click="closeLeakageReportModal" aria-label="Close leakage report dialog" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><x-heroicon-o-x-mark class="size-5" aria-hidden="true" /></button>
                 </div>
                 <div class="flex flex-col gap-3.5 px-5 py-[18px]">
                     <div>
@@ -553,7 +536,7 @@
             <section role="dialog" aria-modal="true" aria-labelledby="stock-in-heading" class="w-full max-w-[460px] overflow-hidden rounded-[10px] bg-white shadow-xl">
                 <div class="flex items-center justify-between border-b border-gray-200 px-5 py-4">
                     <h2 id="stock-in-heading" class="text-[15px] font-bold text-gray-900">Record Stock-In</h2>
-                    <button type="button" wire:click="closeStockInModal" aria-label="Close stock-in dialog" class="text-base text-gray-400 hover:text-gray-600">✕</button>
+                    <button type="button" wire:click="closeStockInModal" aria-label="Close stock-in dialog" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><x-heroicon-o-x-mark class="size-5" aria-hidden="true" /></button>
                 </div>
                 <div class="flex flex-col gap-3.5 px-5 py-[18px]">
                     <div>

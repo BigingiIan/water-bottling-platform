@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\User;
+use App\Services\MLForecastClient;
 use App\Services\SettingsService;
 use App\Services\UserPreferenceService;
 use Illuminate\Support\Facades\Auth;
@@ -20,6 +21,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->scoped(SettingsService::class);
         $this->app->scoped(UserPreferenceService::class);
+        $this->app->scoped(MLForecastClient::class);
     }
 
     /**

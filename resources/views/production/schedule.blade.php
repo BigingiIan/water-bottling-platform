@@ -1,17 +1,14 @@
 <x-app-layout title="Schedule" breadcrumb-section="Production" active-item="Schedule">
-    <div class="mb-5 flex items-end justify-between gap-4">
-        <div>
-            <h1 class="text-[21px] font-extrabold tracking-tight text-gray-900">Production Schedule</h1>
-            <p class="mt-1 text-[13px] text-gray-500">{{ app(\App\Support\SettingsDate::class)->formatInstantDate(now()) }}</p>
-        </div>
+    <x-page-header class="mb-6" title="Production Schedule" :subtitle="app(\App\Support\SettingsDate::class)->formatInstantDate(now())">
         @if (app(\App\Support\ModuleAccess::class)->can(auth()->user(), 'production', true))
-            <div class="flex shrink-0 gap-2">
+            <x-slot:actions>
                 <button type="button" onclick="Livewire.dispatch('open-create-modal')" class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700">
-                    + Create Schedule
+                    <x-heroicon-o-plus class="size-4" aria-hidden="true" />
+                    Create Schedule
                 </button>
-            </div>
+            </x-slot:actions>
         @endif
-    </div>
+    </x-page-header>
 
     <livewire:production-schedule-table />
 

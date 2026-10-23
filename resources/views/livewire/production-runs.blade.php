@@ -1,13 +1,12 @@
 <div>
-    <div class="mb-5 flex items-end justify-between gap-4">
-        <div>
-            <h1 class="text-[21px] font-extrabold tracking-tight text-gray-900">Production Runs</h1>
-            <p class="mt-1 text-[13px] text-gray-500">Open runs for {{ $this->selectedDate }} · {{ number_format($totalActual) }} / {{ number_format($totalTarget) }} units logged</p>
-        </div>
-    </div>
+    <x-page-header
+        class="mb-6"
+        title="Production Runs"
+        :subtitle="'Open runs for '.app(\App\Support\SettingsDate::class)->formatDate($this->selectedDate).' · '.number_format($totalActual).' / '.number_format($totalTarget).' units logged'"
+    />
 
     <section aria-labelledby="runs-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white">
-        <h2 id="runs-heading" class="sr-only">Open production runs for {{ $this->selectedDate }}</h2>
+        <h2 id="runs-heading" class="sr-only">Open production runs for {{ app(\App\Support\SettingsDate::class)->formatDate($this->selectedDate) }}</h2>
 
         <div class="flex flex-wrap items-center gap-2 border-b border-gray-100 bg-gray-50 px-[18px] py-3">
             <label class="sr-only" for="runs-date">Runs date</label>
@@ -24,7 +23,7 @@
                     <option value="{{ $line->id }}">Line: {{ $line->name }}</option>
                 @endforeach
             </select>
-            <p class="ml-auto text-xs text-gray-500">{{ $runs->count() }} open runs</p>
+            <p class="ml-auto text-xs text-gray-500">{{ \App\Support\Plural::count($runs->count(), 'open run') }}</p>
         </div>
 
         @error('runTransition')
@@ -143,9 +142,9 @@
             <div class="flex items-center justify-between gap-4 border-b border-gray-200 px-[18px] py-3.5">
                 <div>
                     <h2 id="run-detail-heading" class="text-sm font-bold text-gray-900">{{ $detailRun->product_sku }} — {{ $detailRun->productionLine?->name ?? '—' }}</h2>
-                    <p class="mt-0.5 text-xs text-gray-500">{{ mb_substr((string) $detailRun->scheduled_time, 0, 5) }} · {{ number_format($detailActual) }} / {{ number_format($detailTarget) }} units · {{ $detailLogs->count() }} log entries</p>
+                    <p class="mt-0.5 text-xs text-gray-500">{{ mb_substr((string) $detailRun->scheduled_time, 0, 5) }} · {{ number_format($detailActual) }} / {{ number_format($detailTarget) }} units · {{ \App\Support\Plural::count($detailLogs->count(), 'log entry') }}</p>
                 </div>
-                <button type="button" wire:click="closeDetail" aria-label="Close run details" class="text-base text-gray-400 hover:text-gray-600">✕</button>
+                <button type="button" wire:click="closeDetail" aria-label="Close run details" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><x-heroicon-o-x-mark class="size-5" aria-hidden="true" /></button>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full min-w-[640px] border-collapse text-left">

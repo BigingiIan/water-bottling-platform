@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ErrorEvent;
 use App\Models\LeakageReport;
+use App\Models\Module;
 use App\Models\Product;
 use App\Models\ProductionSchedule;
 use App\Models\User;
@@ -22,6 +23,7 @@ class NotificationService
         'ok' => 0,
         'low' => 1,
         'critical' => 2,
+        'out' => 3,
     ];
 
     private const PRODUCTION_TARGET_RATIO = 0.9;
@@ -35,19 +37,27 @@ class NotificationService
     {
         $this->guard('stock', function () use ($product, $oldStatus, $newStatus, $actor): void {
             $isWorsening = (self::STOCK_STATUS_RANK[$newStatus] ?? 0) > (self::STOCK_STATUS_RANK[$oldStatus] ?? 0);
+            // Out of stock is reported through the critical-stock setting and preference.
+            $notificationKey = $newStatus === 'low' ? 'notify.low_stock' : 'notify.critical_stock';
 
-            if (! $isWorsening || ! $this->settings->get("notify.{$newStatus}_stock", true)) {
+            if (! $isWorsening || ! $this->settings->get($notificationKey, true)) {
                 return;
             }
 
             $this->send($this->usersWithModuleAccess(['inventory'], ['view', 'full']), [
                 'type' => "stock.{$newStatus}",
-                'title' => "{$product->name} is ".($newStatus === 'critical' ? 'critically low' : 'running low'),
-                'body' => "Stock dropped below the {$newStatus} threshold (reorder at ".number_format((float) $product->reorder_threshold).').',
+                'title' => "{$product->name} is ".match ($newStatus) {
+                    'out' => 'out of stock',
+                    'critical' => 'critically low',
+                    default => 'running low',
+                },
+                'body' => $newStatus === 'out'
+                    ? 'No units remain across all warehouse lines.'
+                    : "Stock dropped below the {$newStatus} threshold (reorder at ".number_format((float) $product->reorder_threshold).').',
                 'url' => route('inventory.overview', absolute: false),
-                'severity' => $newStatus === 'critical' ? 'critical' : 'warning',
+                'severity' => $newStatus === 'low' ? 'warning' : 'critical',
                 'key' => "stock:{$product->id}:{$newStatus}",
-            ], $actor, "notify.{$newStatus}_stock");
+            ], $actor, $notificationKey);
         });
     }
 
@@ -93,6 +103,25 @@ class NotificationService
                 'severity' => 'critical',
                 'key' => "error:{$event->fingerprint}",
             ], $event->user_id === null ? null : User::query()->find($event->user_id), 'notify.system_errors');
+        });
+    }
+
+    public function accessRequested(User $requester, Module $module): void
+    {
+        $this->guard('access', function () use ($requester, $module): void {
+            $administrators = User::query()
+                ->where('status', '!=', 'suspended')
+                ->whereHas('role', fn (Builder $query): Builder => $query->where('slug', 'administrator'))
+                ->get();
+
+            $this->send($administrators, [
+                'type' => 'access.requested',
+                'title' => "{$requester->name} requested access to {$module->name}",
+                'body' => 'Role: '.($requester->role?->name ?? 'Unassigned').'. Review it in Roles & Permissions.',
+                'url' => route('staff.permissions', absolute: false),
+                'severity' => 'info',
+                'key' => "access:{$requester->id}:{$module->slug}",
+            ], $requester);
         });
     }
 

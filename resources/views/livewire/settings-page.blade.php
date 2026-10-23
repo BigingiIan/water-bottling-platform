@@ -3,10 +3,7 @@
         <span x-text="toastMessage"></span>
     </div>
 
-    <header>
-        <h1 class="text-[21px] font-extrabold tracking-tight text-gray-900">Settings</h1>
-        <p class="mt-1 text-[13px] text-gray-500">Manage organisation defaults, operations, notifications, and security.</p>
-    </header>
+    <x-page-header title="Settings" subtitle="Manage organisation defaults, operations, notifications, and security." />
 
     <nav aria-label="Settings sections" class="flex flex-wrap gap-1 border-b border-gray-200">
         @foreach ([

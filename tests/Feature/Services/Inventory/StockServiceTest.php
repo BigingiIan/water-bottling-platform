@@ -66,6 +66,15 @@ class StockServiceTest extends TestCase
         $this->assertSame('ok', $service->statusForProduct($product));
     }
 
+    public function test_zero_stock_is_out_of_stock_regardless_of_threshold(): void
+    {
+        $service = app(StockService::class);
+
+        $this->assertSame('out', $service->statusForProduct($this->createProduct(threshold: 100), 0));
+        $this->assertSame('out', $service->statusForProduct($this->createProduct(threshold: 0), 0));
+        $this->assertSame('ok', $service->statusForProduct($this->createProduct(threshold: 0), 1));
+    }
+
     public function test_cover_days_uses_the_latest_tomorrow_forecast(): void
     {
         $this->travelTo('2026-10-22 09:00:00');
