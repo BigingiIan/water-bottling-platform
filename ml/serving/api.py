@@ -16,6 +16,8 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from serving.inference import ForecastBundle, is_weighted_bundle, load_bundle, predict_sku
+
 logger = logging.getLogger(__name__)
 
 FEATURE_COLUMNS = (
@@ -118,7 +120,13 @@ class ModelRegistry:
             except (OSError, ValueError, KeyError, TypeError, ImportError):
                 logger.exception("Unable to load model artifacts for SKU %s", sku)
 
-    def _load_bundle(self, sku_dir: Path) -> ModelBundle:
+    def _load_bundle(self, sku_dir: Path) -> ModelBundle | ForecastBundle:
+        manifest_path = sku_dir / "manifest.json"
+        if manifest_path.is_file() and is_weighted_bundle(
+            json.loads(manifest_path.read_text(encoding="utf-8"))
+        ):
+            return load_bundle(sku_dir)
+
         required = (
             "prophet.joblib",
             "xgboost.joblib",
@@ -256,6 +264,19 @@ def _lstm_prediction(bundle: ModelBundle, request: PredictionRequest) -> float:
     return max(0.0, float(bundle.lstm_scaler.inverse_transform(inverse_row)[0, 0]))
 
 
+def request_context(request: PredictionRequest) -> pd.DataFrame:
+    """The request as predict_sku() input: history rows, then the target day without sales."""
+    rows = [row.model_dump() for row in request.history]
+    rows.append(
+        {
+            "date": request.date,
+            "units_sold": np.nan,
+            **{name: getattr(request, name) for name in FEATURE_COLUMNS},
+        }
+    )
+    return pd.DataFrame(rows)
+
+
 def predict_units(bundle: ModelBundle, request: PredictionRequest) -> float:
     base_predictions = {
         "prophet_pred": _prophet_prediction(bundle, request),
@@ -298,7 +319,7 @@ app = FastAPI(
 
 @app.post("/predict")
 def predict(payload: PredictionRequest, request: Request) -> dict[str, str | float]:
-    models: dict[str, ModelBundle] = request.app.state.models
+    models: dict[str, ModelBundle | ForecastBundle] = request.app.state.models
     bundle = models.get(payload.sku)
 
     if bundle is None:
@@ -318,7 +339,11 @@ def predict(payload: PredictionRequest, request: Request) -> dict[str, str | flo
         raise HTTPException(status_code=503, detail="Model metadata is unavailable for this SKU")
 
     try:
-        units_sold = predict_units(bundle, payload)
+        if isinstance(bundle, ForecastBundle):
+            forecast = predict_sku(payload.sku, 1, request_context(payload), bundle=bundle)
+            units_sold = float(forecast["predicted_units_sold"].iloc[0])
+        else:
+            units_sold = predict_units(bundle, payload)
     except (KeyError, TypeError, ValueError) as exception:
         logger.exception("Prediction failed for SKU %s", payload.sku)
         raise HTTPException(status_code=503, detail="The model could not score this request") from exception

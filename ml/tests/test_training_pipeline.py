@@ -1,15 +1,14 @@
+import json
 from datetime import date, timedelta
 
-import numpy as np
 import pandas as pd
 import pytest
 
-from serving.api import ModelRegistry, PredictionRequest, predict_units
+from serving.api import ModelRegistry
 from training.train_pipeline import (
     ARTIFACT_FILENAMES,
     chronological_split,
     load_daily_data,
-    run_training,
 )
 
 
@@ -45,61 +44,32 @@ def test_chronological_split_keeps_rows_in_time_order() -> None:
     assert len(final_test) == 32
 
 
-def test_training_exports_a_bundle_loadable_by_the_prediction_service(tmp_path) -> None:
-    data_path = tmp_path / "daily.csv"
-    output_dir = tmp_path / "saved_models"
-    make_daily_data().to_csv(data_path, index=False)
+def test_training_exports_the_full_bundle_layout_and_the_metrics_files(trained_model_dir) -> None:
+    sku_dir = trained_model_dir / "1L"
 
-    comparison = run_training(
-        data_path=data_path,
-        output_dir=output_dir,
-        lookback=14,
-        epochs=1,
-        batch_size=16,
-        verbose=0,
-        seed=21,
-    )
-
-    sku_dir = output_dir / "1L"
     assert set(path.name for path in sku_dir.iterdir()) == set(ARTIFACT_FILENAMES)
-    assert list(comparison.index) == ["1L"]
-    assert set(comparison.columns.get_level_values("Model")) == {
-        "Prophet",
-        "XGBoost",
-        "LSTM",
-        "Stacked",
+    assert {path.name for path in trained_model_dir.iterdir() if path.is_file()} == {
+        "forecast_metrics.csv",
+        "forecast_metrics_summary.csv",
+        "metrics_manifest.json",
+        "final_xgboost_tuning.csv",
     }
 
-    registry = ModelRegistry(output_dir)
+    registry = ModelRegistry(trained_model_dir)
     registry.load_available()
     assert set(registry.models) == {"1L"}
 
-    history = make_daily_data().tail(14).copy()
-    history["date"] = pd.to_datetime(history["date"])
-    future_date = history["date"].iloc[-1] + timedelta(days=1)
-    payload = {
-        "sku": "1L",
-        "date": future_date.isoformat(),
-        "history": [
-            {
-                **row.drop(labels=["product_sku"]).to_dict(),
-                "date": row["date"].date().isoformat(),
-            }
-            for _, row in history.iterrows()
-        ],
-        "is_promotion": False,
-        "is_public_holiday": False,
-        "is_school_term": True,
-        "temperature_c": 22.0,
-    }
 
-    prediction = predict_units(
-        registry.models["1L"],
-        PredictionRequest.model_validate(payload),
-    )
+def test_metrics_file_marks_the_final_test_run_and_the_reported_estimate(trained_model_dir) -> None:
+    metrics = pd.read_csv(trained_model_dir / "forecast_metrics.csv")
+    manifest = json.loads((trained_model_dir / "metrics_manifest.json").read_text())
 
-    assert np.isfinite(prediction)
-    assert prediction >= 0
+    assert set(metrics["run"]) == {"final_test"}
+    assert metrics["is_final_test"].all()
+    assert metrics.loc[metrics["is_reported_estimate"], "model"].eq("Prophet").all()
+    assert sorted(metrics["fold"]) == [0, 1]
+    assert manifest["final_test_runs"] == ["final_test"]
+    assert manifest["reported_estimate"]["per_sku_rmse"] == {"1L": 12.8456}
 
 
 def test_training_rejects_duplicate_sku_dates(tmp_path) -> None:

@@ -2,12 +2,8 @@
     $errorParts = explode(':', $exception->getMessage(), 2);
     $variant = in_array($errorParts[0], ['no_access', 'read_only'], true) ? $errorParts[0] : 'no_access';
     $moduleName = $errorParts[1] ?? null;
-    $roleName = auth()->user()?->role?->name;
     $requestAccessUrl = '#';
-
-    $moduleUrl = $moduleName === 'Users & Roles'
-        ? route('staff.directory')
-        : route('dashboard');
+    $homeUrl = url('/');
 
     if ($variant === 'read_only') {
         $title = 'This action needs full access';
@@ -15,18 +11,16 @@
         $description = "You can view this module, but your role doesn't allow making changes here. Editing is restricted to roles with full access.";
         $chip = ($moduleName ?? 'Module').' · your access: View only';
         $actions = [
-            ['label' => '← Back to '.$moduleName, 'href' => $moduleUrl, 'style' => 'primary'],
+            ['label' => '← Back to Home', 'href' => $homeUrl, 'style' => 'primary'],
             ['label' => 'Request Access', 'href' => $requestAccessUrl, 'style' => 'secondary'],
         ];
     } else {
         $title = "You don't have access to this";
         $icon = '🔒';
         $description = 'Your current role doesn\'t include permission for this area. If you believe this is a mistake, reach out to your system administrator to review your access.';
-        $chip = $moduleName
-            ? $moduleName.' module · role: '.($roleName ?? 'Unknown')
-            : null;
+        $chip = $moduleName ? $moduleName.' module' : null;
         $actions = [
-            ['label' => '← Back to Dashboard', 'href' => route('dashboard'), 'style' => 'primary'],
+            ['label' => '← Back to Home', 'href' => $homeUrl, 'style' => 'primary'],
             ['label' => 'Request Access', 'href' => $requestAccessUrl, 'style' => 'secondary'],
         ];
     }

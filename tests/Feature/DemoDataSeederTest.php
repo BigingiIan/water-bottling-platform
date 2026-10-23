@@ -7,9 +7,13 @@ use App\Models\DailySkuFeature;
 use App\Models\Product;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\Inventory\StockService;
 use App\Services\MLForecastClient;
+use App\Support\LeakageReportFlag;
 use Carbon\CarbonImmutable;
 use Database\Seeders\DemoDataSeeder;
+use Database\Seeders\ModuleSeeder;
+use Database\Seeders\RoleModulePermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -31,8 +35,10 @@ class DemoDataSeederTest extends TestCase
 
         $this->assertDatabaseCount('products', 5);
         $this->assertDatabaseCount('sales_transactions', 150);
-        $this->assertDatabaseCount('warehouse_stock', 5);
-        $this->assertDatabaseCount('production_batches', 1);
+        $this->assertDatabaseCount('warehouse_stock', 6);
+        $this->assertDatabaseCount('production_batches', 5);
+        $this->assertDatabaseCount('stock_movements', 5);
+        $this->assertDatabaseCount('leakage_reports', 4);
         $this->assertDatabaseCount('production_schedules', 4);
         $this->assertSame(
             ['10L', '1L', '20L', '500ml', '5L'],
@@ -97,6 +103,12 @@ class DemoDataSeederTest extends TestCase
             ->whereDate('date', $targetDate->subDay()->toDateString())
             ->value('temperature_c'));
 
+        $products = Product::query()->get()->keyBy('unit_type');
+        $stockService = app(StockService::class);
+        $this->assertSame('low', $stockService->statusForProduct($products['1L']));
+        $this->assertSame('critical', $stockService->statusForProduct($products['20L']));
+        $this->assertSame('ok', $stockService->statusForProduct($products['500ml']));
+
         $this->assertSame(0, DB::table('sales_transactions')
             ->whereDate('transaction_date', $targetDate->toDateString())
             ->count());
@@ -108,10 +120,11 @@ class DemoDataSeederTest extends TestCase
         ]);
     }
 
-    public function test_rerunning_it_creates_no_duplicate_demo_records(): void
+    public function test_rerunning_it_keeps_inventory_demo_records_idempotent_and_statuses_visible(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-10-04'));
         $this->createAdministrator();
+        $this->seed([ModuleSeeder::class, RoleModulePermissionSeeder::class]);
         $seeder = app(DemoDataSeeder::class);
 
         $seeder->run();
@@ -119,11 +132,78 @@ class DemoDataSeederTest extends TestCase
 
         $this->assertDatabaseCount('customers', 1);
         $this->assertDatabaseCount('products', 5);
-        $this->assertDatabaseCount('production_batches', 1);
-        $this->assertDatabaseCount('warehouse_stock', 5);
+        $this->assertDatabaseCount('production_batches', 5);
+        $this->assertDatabaseCount('warehouse_stock', 6);
+        $this->assertDatabaseCount('stock_movements', 5);
+        $this->assertDatabaseCount('leakage_reports', 4);
         $this->assertDatabaseCount('sales_transactions', 150);
         $this->assertDatabaseCount('daily_sku_features', 155);
         $this->assertDatabaseCount('production_schedules', 4);
+
+        $administrator = Role::query()->where('slug', 'administrator')->firstOrFail();
+        $this->actingAs(User::query()->where('role_id', $administrator->id)->firstOrFail())
+            ->get(route('inventory.overview'))
+            ->assertOk()
+            ->assertSee('6 stock lines')
+            ->assertSee('OK')
+            ->assertSee('Low')
+            ->assertSee('Critical');
+
+        $this->assertSame(9600.0, (float) DB::table('warehouse_stock')
+            ->join('products', 'products.id', '=', 'warehouse_stock.product_id')
+            ->where('products.unit_type', '500ml')
+            ->sum('current_level'));
+        $this->assertSame(2150.0, (float) DB::table('warehouse_stock')
+            ->join('products', 'products.id', '=', 'warehouse_stock.product_id')
+            ->where('products.unit_type', '1L')
+            ->sum('current_level'));
+        $stockLines = DB::table('warehouse_stock')
+            ->join('products', 'products.id', '=', 'warehouse_stock.product_id')
+            ->whereIn('warehouse_stock.batch_id', DB::table('production_batches')
+                ->select('id')
+                ->where('notes', 'like', 'Demo%'))
+            ->orderBy('products.unit_type')
+            ->orderBy('warehouse_stock.warehouse_location')
+            ->get([
+                'products.unit_type',
+                'warehouse_stock.warehouse_location',
+                'warehouse_stock.current_level',
+                'warehouse_stock.minimum_threshold',
+            ])
+            ->map(fn (object $line): array => [
+                $line->unit_type,
+                $line->warehouse_location,
+                (int) $line->current_level,
+                (int) $line->minimum_threshold,
+            ])
+            ->all();
+        $this->assertSame([
+            ['10L', 'Bay C2', 610, 500],
+            ['1L', 'Bay B1', 2150, 2500],
+            ['20L', 'Bay D1', 90, 250],
+            ['500ml', 'Bay A1', 6400, 1500],
+            ['500ml', 'Bay A2', 3200, 1500],
+            ['5L', 'Bay C1', 3450, 1500],
+        ], $stockLines);
+
+        $seededFlags = DB::table('leakage_reports')
+            ->join('production_batches', 'production_batches.id', '=', 'leakage_reports.batch_id')
+            ->whereIn('production_batches.notes', [
+                'Demo data: synthetic demand forecasting seed.',
+                'Demo inventory batch B-0934',
+                'Demo inventory batch B-0932',
+                'Demo inventory batch B-0930',
+            ])
+            ->get(['expected_volume', 'actual_volume'])
+            ->map(fn (object $report): string => LeakageReportFlag::fromVolumes(
+                (float) $report->expected_volume,
+                (float) $report->actual_volume,
+            ))
+            ->sort()
+            ->values()
+            ->all();
+        sort($seededFlags);
+        $this->assertSame(['Investigate', 'Normal', 'Normal', 'Review'], $seededFlags);
     }
 
     public function test_each_sku_builds_a_forecast_request_after_seeding(): void
@@ -173,6 +253,8 @@ class DemoDataSeederTest extends TestCase
         $this->assertDatabaseCount('customers', 0);
         $this->assertDatabaseCount('production_batches', 0);
         $this->assertDatabaseCount('warehouse_stock', 0);
+        $this->assertDatabaseCount('stock_movements', 0);
+        $this->assertDatabaseCount('leakage_reports', 0);
         $this->assertDatabaseMissing('daily_sku_features', [
             'product_sku' => '1L',
             'date' => '2026-10-03',

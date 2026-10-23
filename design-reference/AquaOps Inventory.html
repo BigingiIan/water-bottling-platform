@@ -1,0 +1,581 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>AquaOps Inventory</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* Layout: fixed navy sidebar + sticky topbar + tabbed content, same shell as the Production and RBAC mockups.
+     Stock Overview leads with one cover tile per SKU (days of stock left at the ML forecast rate), then the stock table. */
+  :root {
+    --bg: #f8fafc; --surface: #ffffff; --surface-2: #f8fafc; --surface-3: #f1f5f9;
+    --line: #e2e8f0; --line-soft: #f1f5f9; --line-strong: #cbd5e1;
+    --ink: #0f172a; --ink-2: #334155; --muted: #64748b; --faint: #94a3b8;
+    --accent: #2563eb; --accent-soft: #eff6ff; --accent-ink: #1d4ed8; --accent-fill: #3b82f6;
+    --teal-soft: #f0fdfa; --teal-ink: #0f766e;
+    --good: #16a34a; --good-soft: #f0fdf4; --good-ink: #15803d;
+    --warn: #d97706; --warn-soft: #fffbeb; --warn-ink: #b45309;
+    --bad: #dc2626; --bad-soft: #fef2f2; --bad-ink: #b91c1c;
+    --side-bg: #0b1220; --side-ink: #a9b6cc; --side-label: #5b6b85; --side-line: rgba(255,255,255,0.08);
+    --overlay: rgba(15,23,42,0.45);
+    --radius: 8px; --sidebar-w: 248px;
+    --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0b1220; --surface: #111c2f; --surface-2: #0f1a2b; --surface-3: #17243a;
+      --line: #24364f; --line-soft: #1b2a41; --line-strong: #34496a;
+      --ink: #e6edf7; --ink-2: #c0cce0; --muted: #8ea0ba; --faint: #62748f;
+      --accent: #5b9bff; --accent-soft: #14274a; --accent-ink: #8db8ff; --accent-fill: #5b9bff;
+      --teal-soft: #0f2a2a; --teal-ink: #5eead4;
+      --good: #34d399; --good-soft: #0f2a20; --good-ink: #6ee7b7;
+      --warn: #fbbf24; --warn-soft: #2d2410; --warn-ink: #fcd34d;
+      --bad: #f87171; --bad-soft: #2f1517; --bad-ink: #fca5a5;
+      --side-bg: #070d19; --overlay: rgba(0,0,0,0.6);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0b1220; --surface: #111c2f; --surface-2: #0f1a2b; --surface-3: #17243a;
+    --line: #24364f; --line-soft: #1b2a41; --line-strong: #34496a;
+    --ink: #e6edf7; --ink-2: #c0cce0; --muted: #8ea0ba; --faint: #62748f;
+    --accent: #5b9bff; --accent-soft: #14274a; --accent-ink: #8db8ff; --accent-fill: #5b9bff;
+    --teal-soft: #0f2a2a; --teal-ink: #5eead4;
+    --good: #34d399; --good-soft: #0f2a20; --good-ink: #6ee7b7;
+    --warn: #fbbf24; --warn-soft: #2d2410; --warn-ink: #fcd34d;
+    --bad: #f87171; --bad-soft: #2f1517; --bad-ink: #fca5a5;
+    --side-bg: #070d19; --overlay: rgba(0,0,0,0.6);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--ink-2); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); background: var(--surface); z-index: 10; }
+  button, input, select { font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .app { display: flex; min-height: 100vh; }
+
+  /* Sidebar */
+  .sidebar { width: var(--sidebar-w); background: var(--side-bg); color: #cbd5e1; flex-shrink: 0; display: flex; flex-direction: column; padding: 20px 0; position: sticky; top: env(safe-area-inset-top, 0px); height: 100vh; overflow-y: auto; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 20px 22px; border-bottom: 1px solid var(--side-line); margin-bottom: 16px; }
+  .brand-mark { width: 32px; height: 32px; border-radius: 8px; background: linear-gradient(135deg, #3b82f6, #14b8a6); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .brand-text { font-weight: 800; font-size: 15px; color: #fff; }
+  .brand-sub { font-size: 10.5px; color: #94a3b8; font-weight: 500; letter-spacing: 0.4px; text-transform: uppercase; }
+  .nav-section { padding: 0 12px; margin-bottom: 4px; }
+  .nav-label { font-size: 10.5px; font-weight: 700; letter-spacing: 0.8px; color: var(--side-label); text-transform: uppercase; padding: 14px 12px 6px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; font-size: 13.5px; font-weight: 500; color: var(--side-ink); cursor: pointer; text-decoration: none; }
+  .nav-item:hover { background: rgba(255,255,255,0.05); color: #fff; }
+  .nav-item.active { background: rgba(59,130,246,0.15); color: #fff; position: relative; }
+  .nav-item.active::before { content: ''; position: absolute; left: -12px; top: 6px; bottom: 6px; width: 3px; background: #3b82f6; border-radius: 0 3px 3px 0; }
+  .nav-icon { width: 16px; text-align: center; font-size: 14px; opacity: 0.9; }
+  .sidebar-footer { margin-top: auto; padding: 14px 20px 0; border-top: 1px solid var(--side-line); display: flex; align-items: center; gap: 10px; }
+  .avatar-sm { width: 30px; height: 30px; border-radius: 50%; background: #1e3350; color: #cbd5e1; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .sidebar-footer-name { font-size: 12.5px; font-weight: 600; color: #e2e8f0; }
+  .sidebar-footer-role { font-size: 10.5px; color: #94a3b8; }
+
+  /* Main */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .topbar { min-height: 60px; background: var(--surface); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px max(24px, env(safe-area-inset-right, 0px)) 8px 24px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 11; flex-wrap: wrap; }
+  .breadcrumb { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .breadcrumb b { color: var(--ink); font-weight: 600; }
+  .topbar-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .search-box { display: flex; align-items: center; gap: 8px; background: var(--surface-3); border-radius: 6px; padding: 7px 12px; font-size: 13px; color: var(--faint); width: 220px; }
+  .seg { display: inline-flex; background: var(--surface-3); border-radius: 6px; padding: 2px; }
+  .seg button { border: 0; background: transparent; color: var(--muted); font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.12); }
+  .seg-label { font-size: 11px; font-weight: 700; color: var(--faint); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .content { padding: 24px max(28px, env(safe-area-inset-right, 0px)) 40px 28px; flex: 1; min-width: 0; }
+  .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  .page-title { font-size: 21px; font-weight: 800; color: var(--ink); letter-spacing: -0.3px; text-wrap: balance; }
+  .page-sub { font-size: 13px; color: var(--muted); margin-top: 3px; }
+  .head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .btn { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; padding: 9px 15px; border-radius: 6px; border: 1px solid transparent; cursor: pointer; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { filter: brightness(1.08); }
+  .btn-secondary { background: var(--surface); color: var(--ink-2); border-color: var(--line-strong); }
+  .btn-secondary:hover { background: var(--surface-3); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  [data-access="view"] .write-only { display: none !important; }
+  .view-banner { display: none; align-items: center; gap: 10px; background: var(--accent-soft); color: var(--accent-ink); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 14px; font-size: 12.5px; margin-bottom: 18px; }
+  [data-access="view"] .view-banner { display: flex; }
+
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin-bottom: 20px; overflow-x: auto; }
+  .tab { padding: 10px 4px; margin-right: 22px; font-size: 13.5px; font-weight: 600; color: var(--muted); border: 0; background: none; border-bottom: 2px solid transparent; cursor: pointer; white-space: nowrap; }
+  .tab[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab .count { font-size: 11px; background: var(--surface-3); color: var(--muted); border-radius: 10px; padding: 1px 7px; margin-left: 6px; }
+  .tab .count.alert { background: var(--bad-soft); color: var(--bad-ink); }
+
+  /* SKU cover tiles */
+  .sku-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(176px, 1fr)); gap: 14px; margin-bottom: 22px; }
+  .sku-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; min-width: 0; }
+  .sku-card.low { border-color: var(--warn); }
+  .sku-card.critical { border-color: var(--bad); }
+  .sku-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .sku-tag { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 5px; background: var(--teal-soft); color: var(--teal-ink); }
+  .sku-total { font-size: 24px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .sku-total small { font-size: 12px; font-weight: 600; color: var(--faint); margin-left: 3px; }
+  .sku-meta { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .cover { margin-top: 12px; }
+  .cover-line { display: flex; justify-content: space-between; align-items: baseline; font-size: 11.5px; color: var(--muted); }
+  .cover-line b { font-size: 13px; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .cover-track { height: 6px; background: var(--surface-3); border-radius: 4px; margin-top: 6px; position: relative; overflow: hidden; }
+  .cover-fill { height: 100%; border-radius: 4px; }
+  .fill-good { background: var(--good); } .fill-warn { background: var(--warn); } .fill-bad { background: var(--bad); }
+
+  /* Panels and tables */
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; min-width: 0; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .panel-title { font-size: 14px; font-weight: 700; color: var(--ink); }
+  .panel-title-sub { font-size: 12px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+  .filters { display: flex; gap: 8px; padding: 12px 18px; border-bottom: 1px solid var(--line-soft); background: var(--surface-2); align-items: center; flex-wrap: wrap; }
+  .filter-chip { font-size: 12px; font-weight: 500; color: var(--ink-2); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 6px; padding: 6px 11px; }
+  .filter-spacer { margin-left: auto; font-size: 11.5px; color: var(--muted); }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; min-width: 720px; }
+  th { text-align: left; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; padding: 10px 18px; background: var(--surface-2); border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 12px 18px; font-size: 13px; color: var(--ink-2); border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--surface-2); }
+  .mono { font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .num { text-align: right; }
+  th.num { text-align: right; }
+  .neg { color: var(--bad-ink); } .pos { color: var(--good-ink); }
+
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 20px; white-space: nowrap; }
+  .badge-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .badge-green { background: var(--good-soft); color: var(--good-ink); } .badge-green .badge-dot { background: var(--good); }
+  .badge-amber { background: var(--warn-soft); color: var(--warn-ink); } .badge-amber .badge-dot { background: var(--warn); }
+  .badge-red { background: var(--bad-soft); color: var(--bad-ink); } .badge-red .badge-dot { background: var(--bad); }
+  .badge-blue { background: var(--accent-soft); color: var(--accent-ink); } .badge-blue .badge-dot { background: var(--accent-fill); }
+  .badge-gray { background: var(--surface-3); color: var(--muted); } .badge-gray .badge-dot { background: var(--faint); }
+
+  .level-cell { display: flex; align-items: center; gap: 10px; min-width: 150px; }
+  .level-track { flex: 1; height: 6px; background: var(--surface-3); border-radius: 4px; position: relative; overflow: visible; }
+  .level-fill { height: 100%; border-radius: 4px; }
+  .level-min { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink-2); opacity: 0.55; border-radius: 1px; }
+
+  .row-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  .action-icon { min-width: 28px; height: 28px; padding: 0 8px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; color: var(--muted); border: 0; background: none; cursor: pointer; white-space: nowrap; }
+  .action-icon:hover { background: var(--surface-3); color: var(--ink); }
+
+  .two-col { display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px; align-items: start; margin-top: 22px; }
+  .alert-item { display: flex; gap: 12px; padding: 13px 18px; border-bottom: 1px solid var(--line-soft); align-items: flex-start; }
+  .alert-item:last-child { border-bottom: none; }
+  .alert-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 7px; flex-shrink: 0; }
+  .alert-body { flex: 1; min-width: 0; }
+  .alert-text { font-size: 12.5px; color: var(--ink-2); }
+  .alert-text b { color: var(--ink); }
+  .alert-time { font-size: 11px; color: var(--faint); margin-top: 2px; }
+  .link-btn { font-size: 12px; font-weight: 600; color: var(--accent-ink); background: none; border: 0; cursor: pointer; padding: 0; margin-top: 6px; }
+  .section-note { font-size: 12px; color: var(--muted); padding: 12px 18px; border-top: 1px solid var(--line-soft); background: var(--surface-2); }
+  .forecast-strip { display: flex; align-items: center; gap: 10px; padding: 12px 18px; background: var(--accent-soft); border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--accent-ink); flex-wrap: wrap; }
+  .forecast-strip b { font-weight: 700; }
+
+  .example-tag { font-size: 10.5px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--faint); }
+
+  /* Modal */
+  .modal-overlay { position: fixed; inset: 0; background: var(--overlay); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px max(16px, env(safe-area-inset-right, 0px)) 16px max(16px, env(safe-area-inset-left, 0px)); }
+  .modal { width: 460px; max-width: 100%; max-height: 100%; overflow-y: auto; background: var(--surface); border-radius: 10px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+  .modal-head { padding: 16px 20px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; }
+  .modal-title { font-size: 15px; font-weight: 700; color: var(--ink); }
+  .modal-close { font-size: 16px; color: var(--faint); cursor: pointer; background: none; border: 0; }
+  .modal-body { padding: 18px 20px; }
+  .form-row { margin-bottom: 14px; }
+  .form-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-label { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; display: block; }
+  .form-input, .form-select { width: 100%; padding: 9px 11px; border: 1px solid var(--line-strong); border-radius: 6px; font-size: 13px; color: var(--ink); background: var(--surface); }
+  .form-hint { font-size: 11px; color: var(--faint); margin-top: 5px; }
+  .preview-box { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; font-size: 12.5px; }
+  .preview-box b { font-family: var(--mono); font-size: 13px; color: var(--ink); }
+  .modal-foot { padding: 14px 20px; border-top: 1px solid var(--line); display: flex; justify-content: flex-end; gap: 8px; background: var(--surface-2); }
+
+  [hidden] { display: none !important; }
+
+  @media (max-width: 1000px) {
+    .two-col { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 860px) {
+    .sidebar { display: none; }
+    .topbar { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+    .content { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+    .search-box { display: none; }
+  }
+  @media (max-width: 520px) {
+    .form-two { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .cover-fill, .level-fill { transition: width .3s ease; }
+  }
+</style>
+
+<div class="app" id="app" data-access="full">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M12 2.5c3.6 4.3 6.5 7.8 6.5 11.4a6.5 6.5 0 0 1-13 0C5.5 10.3 8.4 6.8 12 2.5z"/></svg>
+      </div>
+      <div><div class="brand-text">AquaOps</div><div class="brand-sub">Operations Console</div></div>
+    </div>
+    <div class="nav-section"><a class="nav-item"><span class="nav-icon">▣</span> Dashboard</a></div>
+    <div class="nav-section">
+      <div class="nav-label">Production</div>
+      <a class="nav-item"><span class="nav-icon">⚙</span> Schedule</a>
+      <a class="nav-item"><span class="nav-icon">◫</span> Production Runs</a>
+      <a class="nav-item"><span class="nav-icon">◷</span> History</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Inventory</div>
+      <a class="nav-item active"><span class="nav-icon">▦</span> Stock Overview</a>
+      <a class="nav-item"><span class="nav-icon">▤</span> Orders</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">Analytics</div>
+      <a class="nav-item"><span class="nav-icon">↗</span> Forecasting</a>
+      <a class="nav-item"><span class="nav-icon">▥</span> Reports</a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-label">System</div>
+      <a class="nav-item"><span class="nav-icon">⛨</span> Users &amp; Roles</a>
+      <a class="nav-item"><span class="nav-icon">⚑</span> Error Logs</a>
+      <a class="nav-item"><span class="nav-icon">⚙</span> Settings</a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="avatar-sm">JM</div>
+      <div><div class="sidebar-footer-name">Joseph Mwangi</div><div class="sidebar-footer-role">Warehouse Manager</div></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="breadcrumb">Inventory <span>/</span> <b>Stock Overview</b></div>
+      <div class="topbar-actions">
+        <span class="seg-label">Preview access</span>
+        <div class="seg" role="group" aria-label="Preview access level">
+          <button type="button" id="acc-full" aria-pressed="true">Full</button>
+          <button type="button" id="acc-view" aria-pressed="false">View only</button>
+        </div>
+        <div class="search-box">Search products, batches…</div>
+        <div class="avatar-sm">JM</div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <div class="page-head">
+        <div>
+          <div class="page-title">Stock Overview</div>
+          <div class="page-sub">22 October 2026 · Main warehouse · <span class="example-tag">Sample data</span></div>
+        </div>
+        <div class="head-actions write-only">
+          <button type="button" class="btn btn-secondary" data-open-adjust>Adjust Stock</button>
+          <button type="button" class="btn btn-primary">+ Record Stock-In</button>
+        </div>
+      </div>
+
+      <div class="view-banner">You have view-only access to Inventory. Adjustments and stock-in are hidden.</div>
+
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" id="t-stock" aria-selected="true" data-tab="stock">Stock Overview</button>
+        <button class="tab" role="tab" id="t-batches" aria-selected="false" data-tab="batches">Batches</button>
+        <button class="tab" role="tab" id="t-leak" aria-selected="false" data-tab="leak">Leakage Reports<span class="count alert">2</span></button>
+        <button class="tab" role="tab" id="t-moves" aria-selected="false" data-tab="moves">Movements</button>
+      </div>
+
+      <!-- ============ STOCK OVERVIEW ============ -->
+      <section id="tab-stock" role="tabpanel" aria-labelledby="t-stock">
+
+        <div class="sku-row">
+          <div class="sku-card">
+            <div class="sku-top"><span class="sku-tag">500ml</span><span class="badge badge-green"><span class="badge-dot"></span>OK</span></div>
+            <div class="sku-total">9,600<small>units</small></div>
+            <div class="sku-meta">Reorder at 3,000</div>
+            <div class="cover"><div class="cover-line"><span>Cover at forecast</span><b>3.2 days</b></div><div class="cover-track"><div class="cover-fill fill-good" style="width:80%"></div></div></div>
+          </div>
+          <div class="sku-card low">
+            <div class="sku-top"><span class="sku-tag">1L</span><span class="badge badge-amber"><span class="badge-dot"></span>Low</span></div>
+            <div class="sku-total">2,150<small>units</small></div>
+            <div class="sku-meta">Reorder at 2,500</div>
+            <div class="cover"><div class="cover-line"><span>Cover at forecast</span><b>0.8 days</b></div><div class="cover-track"><div class="cover-fill fill-warn" style="width:20%"></div></div></div>
+          </div>
+          <div class="sku-card">
+            <div class="sku-top"><span class="sku-tag">5L</span><span class="badge badge-green"><span class="badge-dot"></span>OK</span></div>
+            <div class="sku-total">3,450<small>units</small></div>
+            <div class="sku-meta">Reorder at 1,500</div>
+            <div class="cover"><div class="cover-line"><span>Cover at forecast</span><b>2.3 days</b></div><div class="cover-track"><div class="cover-fill fill-good" style="width:57%"></div></div></div>
+          </div>
+          <div class="sku-card">
+            <div class="sku-top"><span class="sku-tag">10L</span><span class="badge badge-green"><span class="badge-dot"></span>OK</span></div>
+            <div class="sku-total">610<small>units</small></div>
+            <div class="sku-meta">Reorder at 500</div>
+            <div class="cover"><div class="cover-line"><span>Cover at forecast</span><b>1.5 days</b></div><div class="cover-track"><div class="cover-fill fill-good" style="width:37%"></div></div></div>
+          </div>
+          <div class="sku-card critical">
+            <div class="sku-top"><span class="sku-tag">20L</span><span class="badge badge-red"><span class="badge-dot"></span>Critical</span></div>
+            <div class="sku-total">90<small>units</small></div>
+            <div class="sku-meta">Reorder at 250</div>
+            <div class="cover"><div class="cover-line"><span>Cover at forecast</span><b>0.3 days</b></div><div class="cover-track"><div class="cover-fill fill-bad" style="width:9%"></div></div></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="forecast-strip">
+            <b>ML Demand Forecast</b> · Cover is current stock divided by tomorrow's forecast demand for each SKU.
+            <span style="margin-left:auto;">Model 2026-10-04 · covers 5 of 5 SKUs</span>
+          </div>
+          <div class="filters">
+            <div class="filter-chip">Product: All ▾</div>
+            <div class="filter-chip">Location: All ▾</div>
+            <div class="filter-chip">Status: All ▾</div>
+            <span class="filter-spacer">6 stock lines</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Product</th><th>Batch</th><th>Location</th><th class="num">Level</th><th>Against minimum</th><th>Status</th><th>Last updated</th><th></th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="sku-tag">500ml</span></td><td class="mono">B-0931</td><td>Bay A1</td><td class="num mono">6,400</td>
+                  <td><div class="level-cell"><div class="level-track"><div class="level-fill fill-good" style="width:100%"></div><div class="level-min" style="left:23%" title="Minimum 1,500"></div></div><span class="mono" style="color:var(--muted)">1,500</span></div></td>
+                  <td><span class="badge badge-green"><span class="badge-dot"></span>OK</span></td><td class="mono">Today 07:42</td>
+                  <td><div class="row-actions write-only"><button type="button" class="action-icon" data-open-adjust data-row="B-0931 · 500ml · Bay A1" data-level="6400">Adjust</button></div></td>
+                </tr>
+                <tr>
+                  <td><span class="sku-tag">500ml</span></td><td class="mono">B-0934</td><td>Bay A2</td><td class="num mono">3,200</td>
+                  <td><div class="level-cell"><div class="level-track"><div class="level-fill fill-good" style="width:50%"></div><div class="level-min" style="left:23%" title="Minimum 1,500"></div></div><span class="mono" style="color:var(--muted)">1,500</span></div></td>
+                  <td><span class="badge badge-green"><span class="badge-dot"></span>OK</span></td><td class="mono">Yesterday 16:10</td>
+                  <td><div class="row-actions write-only"><button type="button" class="action-icon" data-open-adjust data-row="B-0934 · 500ml · Bay A2" data-level="3200">Adjust</button></div></td>
+                </tr>
+                <tr>
+                  <td><span class="sku-tag">1L</span></td><td class="mono">B-0932</td><td>Bay B1</td><td class="num mono">2,150</td>
+                  <td><div class="level-cell"><div class="level-track"><div class="level-fill fill-warn" style="width:86%"></div><div class="level-min" style="left:100%" title="Minimum 2,500"></div></div><span class="mono" style="color:var(--muted)">2,500</span></div></td>
+                  <td><span class="badge badge-amber"><span class="badge-dot"></span>Low</span></td><td class="mono">Today 09:15</td>
+                  <td><div class="row-actions write-only"><button type="button" class="action-icon" data-open-adjust data-row="B-0932 · 1L · Bay B1" data-level="2150">Adjust</button></div></td>
+                </tr>
+                <tr>
+                  <td><span class="sku-tag">5L</span></td><td class="mono">B-0930</td><td>Bay C1</td><td class="num mono">3,450</td>
+                  <td><div class="level-cell"><div class="level-track"><div class="level-fill fill-good" style="width:100%"></div><div class="level-min" style="left:43%" title="Minimum 1,500"></div></div><span class="mono" style="color:var(--muted)">1,500</span></div></td>
+                  <td><span class="badge badge-green"><span class="badge-dot"></span>OK</span></td><td class="mono">Yesterday 14:30</td>
+                  <td><div class="row-actions write-only"><button type="button" class="action-icon" data-open-adjust data-row="B-0930 · 5L · Bay C1" data-level="3450">Adjust</button></div></td>
+                </tr>
+                <tr>
+                  <td><span class="sku-tag">10L</span></td><td class="mono">B-0929</td><td>Bay C2</td><td class="num mono">610</td>
+                  <td><div class="level-cell"><div class="level-track"><div class="level-fill fill-good" style="width:100%"></div><div class="level-min" style="left:82%" title="Minimum 500"></div></div><span class="mono" style="color:var(--muted)">500</span></div></td>
+                  <td><span class="badge badge-green"><span class="badge-dot"></span>OK</span></td><td class="mono">20 Oct 11:05</td>
+                  <td><div class="row-actions write-only"><button type="button" class="action-icon" data-open-adjust data-row="B-0929 · 10L · Bay C2" data-level="610">Adjust</button></div></td>
+                </tr>
+                <tr>
+                  <td><span class="sku-tag">20L</span></td><td class="mono">B-0927</td><td>Bay D1</td><td class="num mono">90</td>
+                  <td><div class="level-cell"><div class="level-track"><div class="level-fill fill-bad" style="width:36%"></div><div class="level-min" style="left:100%" title="Minimum 250"></div></div><span class="mono" style="color:var(--muted)">250</span></div></td>
+                  <td><span class="badge badge-red"><span class="badge-dot"></span>Critical</span></td><td class="mono">Today 08:20</td>
+                  <td><div class="row-actions write-only"><button type="button" class="action-icon" data-open-adjust data-row="B-0927 · 20L · Bay D1" data-level="90">Adjust</button></div></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="section-note">Low means the product's total is under its reorder threshold. Critical means under half of it. The bar marks each location's own minimum.</div>
+        </div>
+
+        <div class="two-col">
+          <div class="panel">
+            <div class="panel-head">
+              <div><div class="panel-title">Needs attention</div><div class="panel-title-sub">Based on stock now and tomorrow's forecast</div></div>
+              <span class="badge badge-red"><span class="badge-dot"></span>2 products</span>
+            </div>
+            <div class="alert-item">
+              <div class="alert-dot" style="background:var(--bad)"></div>
+              <div class="alert-body">
+                <div class="alert-text"><b>20L</b> is at 90 units, 0.3 days of cover. Forecast demand tomorrow is 260 units.</div>
+                <div class="alert-time">Below half of reorder threshold</div>
+                <button type="button" class="link-btn write-only">Plan a 20L run (suggest 520 units) →</button>
+              </div>
+            </div>
+            <div class="alert-item">
+              <div class="alert-dot" style="background:var(--warn)"></div>
+              <div class="alert-body">
+                <div class="alert-text"><b>1L</b> is at 2,150 units, 0.8 days of cover. Forecast demand tomorrow is 2,640 units.</div>
+                <div class="alert-time">Below reorder threshold of 2,500</div>
+                <button type="button" class="link-btn write-only">Plan a 1L run (suggest 2,640 units) →</button>
+              </div>
+            </div>
+            <div class="alert-item">
+              <div class="alert-dot" style="background:var(--accent-fill)"></div>
+              <div class="alert-body">
+                <div class="alert-text">Batch <b>B-0931</b> in Bay A1 has a leakage report 2.4% over expected.</div>
+                <div class="alert-time">See Leakage Reports</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-head"><div class="panel-title">Recent movements</div><button type="button" class="link-btn" style="margin:0" data-goto="moves">View all</button></div>
+            <div class="alert-item"><div class="alert-dot" style="background:var(--good)"></div><div class="alert-body"><div class="alert-text"><b class="pos">+1,800</b> 500ml from production run PR-1031</div><div class="alert-time">Today 07:42</div></div></div>
+            <div class="alert-item"><div class="alert-dot" style="background:var(--bad)"></div><div class="alert-body"><div class="alert-text"><b class="neg">−600</b> 1L sold to Naivas Kilimani</div><div class="alert-time">Today 09:15</div></div></div>
+            <div class="alert-item"><div class="alert-dot" style="background:var(--warn)"></div><div class="alert-body"><div class="alert-text"><b class="neg">−12</b> 20L damaged in handling, adjusted by J. Mwangi</div><div class="alert-time">Today 08:20</div></div></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ BATCHES ============ -->
+      <section id="tab-batches" role="tabpanel" aria-labelledby="t-batches" hidden>
+        <div class="panel">
+          <div class="panel-head"><div><div class="panel-title">Production batches</div><div class="panel-title-sub">Water in, bottled volume out, per batch</div></div></div>
+          <div class="filters"><div class="filter-chip">Date: Last 14 days ▾</div><div class="filter-chip">Status: All ▾</div></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Batch</th><th>Date</th><th class="num">Raw water (L)</th><th class="num">Bottled (L)</th><th class="num">Yield</th><th>Status</th><th>Operator</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">B-0934</td><td>21 Oct 2026</td><td class="num mono">9,800</td><td class="num mono">9,520</td><td class="num mono">97.1%</td><td><span class="badge badge-green"><span class="badge-dot"></span>Completed</span></td><td>Peter Otieno</td></tr>
+                <tr><td class="mono">B-0932</td><td>21 Oct 2026</td><td class="num mono">2,900</td><td class="num mono">2,810</td><td class="num mono">96.9%</td><td><span class="badge badge-green"><span class="badge-dot"></span>Completed</span></td><td>Peter Otieno</td></tr>
+                <tr><td class="mono">B-0931</td><td>20 Oct 2026</td><td class="num mono">7,200</td><td class="num mono">6,980</td><td class="num mono">96.9%</td><td><span class="badge badge-amber"><span class="badge-dot"></span>Quality hold</span></td><td>Grace Wanjiru</td></tr>
+                <tr><td class="mono">B-0930</td><td>19 Oct 2026</td><td class="num mono">5,200</td><td class="num mono">5,060</td><td class="num mono">97.3%</td><td><span class="badge badge-green"><span class="badge-dot"></span>Completed</span></td><td>Grace Wanjiru</td></tr>
+                <tr><td class="mono">B-0935</td><td>22 Oct 2026</td><td class="num mono">3,100</td><td class="num mono">—</td><td class="num mono">—</td><td><span class="badge badge-blue"><span class="badge-dot"></span>In progress</span></td><td>Peter Otieno</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ LEAKAGE ============ -->
+      <section id="tab-leak" role="tabpanel" aria-labelledby="t-leak" hidden>
+        <div class="panel">
+          <div class="panel-head"><div><div class="panel-title">Leakage reports</div><div class="panel-title-sub">Expected volume against what was actually bottled or counted</div></div>
+            <button type="button" class="btn btn-secondary btn-sm write-only">+ New Report</button></div>
+          <div class="filters"><div class="filter-chip">Flag: All ▾</div><span class="filter-spacer">Amber above 2%, red above 5%</span></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Batch</th><th>Report date</th><th class="num">Expected (L)</th><th class="num">Actual (L)</th><th class="num">Discrepancy (L)</th><th class="num">%</th><th>Flag</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">B-0931</td><td>21 Oct 2026</td><td class="num mono">7,200</td><td class="num mono">7,028</td><td class="num mono neg">−172</td><td class="num mono">2.4%</td><td><span class="badge badge-amber"><span class="badge-dot"></span>Review</span></td></tr>
+                <tr><td class="mono">B-0927</td><td>18 Oct 2026</td><td class="num mono">1,000</td><td class="num mono">930</td><td class="num mono neg">−70</td><td class="num mono">7.0%</td><td><span class="badge badge-red"><span class="badge-dot"></span>Investigate</span></td></tr>
+                <tr><td class="mono">B-0930</td><td>20 Oct 2026</td><td class="num mono">5,200</td><td class="num mono">5,152</td><td class="num mono neg">−48</td><td class="num mono">0.9%</td><td><span class="badge badge-green"><span class="badge-dot"></span>Normal</span></td></tr>
+                <tr><td class="mono">B-0929</td><td>19 Oct 2026</td><td class="num mono">2,400</td><td class="num mono">2,388</td><td class="num mono neg">−12</td><td class="num mono">0.5%</td><td><span class="badge badge-green"><span class="badge-dot"></span>Normal</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ MOVEMENTS ============ -->
+      <section id="tab-moves" role="tabpanel" aria-labelledby="t-moves" hidden>
+        <div class="panel">
+          <div class="panel-head"><div><div class="panel-title">Stock movements</div><div class="panel-title-sub">Every change to a stock level, newest first</div></div></div>
+          <div class="filters"><div class="filter-chip">Type: All ▾</div><div class="filter-chip">Product: All ▾</div><div class="filter-chip">Date: Last 7 days ▾</div></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>When</th><th>Type</th><th>Product</th><th class="num">Change</th><th class="num">Level after</th><th>Reference</th><th>By</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">Today 09:15</td><td><span class="badge badge-blue"><span class="badge-dot"></span>Sale</span></td><td><span class="sku-tag">1L</span></td><td class="num mono neg">−600</td><td class="num mono">2,150</td><td class="mono">TXN-4418</td><td>System</td></tr>
+                <tr><td class="mono">Today 08:20</td><td><span class="badge badge-amber"><span class="badge-dot"></span>Adjustment</span></td><td><span class="sku-tag">20L</span></td><td class="num mono neg">−12</td><td class="num mono">90</td><td>Damaged in handling</td><td>J. Mwangi</td></tr>
+                <tr><td class="mono">Today 07:42</td><td><span class="badge badge-green"><span class="badge-dot"></span>Production</span></td><td><span class="sku-tag">500ml</span></td><td class="num mono pos">+1,800</td><td class="num mono">6,400</td><td class="mono">PR-1031</td><td>System</td></tr>
+                <tr><td class="mono">Yesterday 16:10</td><td><span class="badge badge-green"><span class="badge-dot"></span>Production</span></td><td><span class="sku-tag">500ml</span></td><td class="num mono pos">+3,200</td><td class="num mono">3,200</td><td class="mono">PR-1029</td><td>System</td></tr>
+                <tr><td class="mono">Yesterday 11:03</td><td><span class="badge badge-red"><span class="badge-dot"></span>Leakage write-off</span></td><td><span class="sku-tag">20L</span></td><td class="num mono neg">−70</td><td class="num mono">102</td><td class="mono">B-0927</td><td>G. Wanjiru</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="section-note">Sales deduct stock and production runs add it automatically. Manual adjustments always need a reason.</div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</div>
+
+<!-- ===== Adjust Stock modal ===== -->
+<div class="modal-overlay" id="adjust-modal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="adj-title">
+    <div class="modal-head">
+      <div class="modal-title" id="adj-title">Adjust Stock</div>
+      <button type="button" class="modal-close" id="adj-close" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label class="form-label" for="adj-row">Stock line</label>
+        <select class="form-select" id="adj-row">
+          <option value="6400">B-0931 · 500ml · Bay A1</option>
+          <option value="3200">B-0934 · 500ml · Bay A2</option>
+          <option value="2150">B-0932 · 1L · Bay B1</option>
+          <option value="3450">B-0930 · 5L · Bay C1</option>
+          <option value="610">B-0929 · 10L · Bay C2</option>
+          <option value="90">B-0927 · 20L · Bay D1</option>
+        </select>
+      </div>
+      <div class="form-two">
+        <div class="form-row">
+          <label class="form-label" for="adj-type">Reason type</label>
+          <select class="form-select" id="adj-type">
+            <option>Count correction</option><option>Damaged</option><option>Leakage write-off</option><option>Customer return</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label class="form-label" for="adj-qty">Change (units)</label>
+          <input class="form-input" id="adj-qty" type="number" value="-12" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="preview-box"><span>Level after saving</span><span><b id="adj-before">90</b> → <b id="adj-after">78</b></span></div>
+        <div class="form-hint" id="adj-hint">Use a negative number to remove stock.</div>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="adj-note">Note (required)</label>
+        <input class="form-input" id="adj-note" placeholder="e.g. 12 jerrycans cracked during offload" />
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-secondary" id="adj-cancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="adj-save">Save Adjustment</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var app = document.getElementById('app');
+  var tabs = document.querySelectorAll('.tab');
+  var panels = { stock: 'tab-stock', batches: 'tab-batches', leak: 'tab-leak', moves: 'tab-moves' };
+
+  function showTab(key) {
+    tabs.forEach(function (t) { t.setAttribute('aria-selected', t.dataset.tab === key ? 'true' : 'false'); });
+    Object.keys(panels).forEach(function (k) { document.getElementById(panels[k]).hidden = (k !== key); });
+  }
+  tabs.forEach(function (t) { t.addEventListener('click', function () { showTab(t.dataset.tab); }); });
+  document.querySelectorAll('[data-goto]').forEach(function (b) { b.addEventListener('click', function () { showTab(b.dataset.goto); }); });
+
+  var full = document.getElementById('acc-full'), view = document.getElementById('acc-view');
+  function setAccess(mode) {
+    app.dataset.access = mode;
+    full.setAttribute('aria-pressed', mode === 'full' ? 'true' : 'false');
+    view.setAttribute('aria-pressed', mode === 'view' ? 'true' : 'false');
+  }
+  full.addEventListener('click', function () { setAccess('full'); });
+  view.addEventListener('click', function () { setAccess('view'); });
+
+  var modal = document.getElementById('adjust-modal');
+  var sel = document.getElementById('adj-row'), qty = document.getElementById('adj-qty');
+  var before = document.getElementById('adj-before'), after = document.getElementById('adj-after'), hint = document.getElementById('adj-hint');
+  function fmt(n) { return Number(n).toLocaleString('en-US'); }
+  function refresh() {
+    var base = parseInt(sel.value, 10) || 0, d = parseInt(qty.value, 10) || 0, next = base + d;
+    before.textContent = fmt(base); after.textContent = fmt(Math.max(next, 0));
+    hint.textContent = next < 0 ? 'This would take the level below zero. Reduce the change.' : 'Use a negative number to remove stock.';
+  }
+  function openModal(level) {
+    if (level) { for (var i = 0; i < sel.options.length; i++) { if (sel.options[i].value === level) { sel.selectedIndex = i; break; } } }
+    refresh(); modal.hidden = false; qty.focus();
+  }
+  function closeModal() { modal.hidden = true; }
+  document.querySelectorAll('[data-open-adjust]').forEach(function (b) { b.addEventListener('click', function () { openModal(b.dataset.level); }); });
+  ['adj-close', 'adj-cancel', 'adj-save'].forEach(function (id) { document.getElementById(id).addEventListener('click', closeModal); });
+  sel.addEventListener('change', refresh); qty.addEventListener('input', refresh);
+  modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !modal.hidden) closeModal(); });
+})();
+</script>
+
+</body></html>

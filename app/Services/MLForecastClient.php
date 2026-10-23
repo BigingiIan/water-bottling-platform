@@ -11,8 +11,6 @@ use Illuminate\Support\Facades\Log;
 
 class MLForecastClient
 {
-    private const HISTORY_DAYS = 14;
-
     public function predict(string $sku, string $date): ?float
     {
         $targetDate = CarbonImmutable::createFromFormat('!Y-m-d', $date);
@@ -25,7 +23,8 @@ class MLForecastClient
             return null;
         }
 
-        $historyStart = $targetDate->subDays(self::HISTORY_DAYS);
+        $historyDays = app(SettingsService::class)->get('forecast.min_coverage_days', 14);
+        $historyStart = $targetDate->subDays($historyDays);
         $featureRows = DB::table('daily_sku_features')
             ->where('product_sku', $sku)
             ->whereBetween('date', [$historyStart->toDateString(), $date])
@@ -46,7 +45,7 @@ class MLForecastClient
 
         $history = [];
 
-        for ($offset = self::HISTORY_DAYS; $offset > 0; $offset--) {
+        for ($offset = $historyDays; $offset > 0; $offset--) {
             $historyDate = $targetDate->subDays($offset)->toDateString();
             $feature = $featureRows->get($historyDate);
 
@@ -148,9 +147,10 @@ class MLForecastClient
                     'horizon_days' => 1,
                     'model_version' => $modelVersion,
                     'rmse_score' => $rmseScore,
+                    'generated_at' => now()->utc(),
                 ]],
                 ['product_id', 'forecast_date', 'model_version'],
-                ['predicted_demand', 'horizon_days', 'rmse_score'],
+                ['predicted_demand', 'horizon_days', 'rmse_score', 'generated_at'],
             );
         } catch (QueryException $exception) {
             Log::error('ML forecast could not be persisted.', [

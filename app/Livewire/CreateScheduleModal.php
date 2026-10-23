@@ -7,6 +7,7 @@ use App\Models\ProductionLine;
 use App\Models\ProductionSchedule;
 use App\Models\User;
 use App\Services\MLForecastClient;
+use App\Services\SettingsService;
 use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Validation\Rule;
@@ -120,7 +121,9 @@ class CreateScheduleModal extends Component
      */
     private function forecastSuggestion(): ?array
     {
-        if ($this->productSku === '' || $this->scheduledDate === '') {
+        if (! app(SettingsService::class)->get('forecast.enabled', true)
+            || $this->productSku === ''
+            || $this->scheduledDate === '') {
             return null;
         }
 
