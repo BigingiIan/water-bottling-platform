@@ -24,7 +24,7 @@ class SettingsPage extends Component
 {
     use WithPagination;
 
-    private const TABS = ['general', 'operations', 'forecasting', 'notifications', 'security', 'audit'];
+    private const TABS = ['general', 'operations', 'forecasting', 'invoicing', 'notifications', 'security', 'audit'];
 
     #[Url(as: 'tab', except: 'general')]
     public string $activeTab = 'general';

@@ -78,10 +78,10 @@
 
                 <x-dashboard-card title="Leakage review" icon="beaker" :href="route('inventory.overview', ['tab' => 'leakage'])" link-label="Leakage">
                     @if ($leakageAttentionCount === 0)
-                        <p class="{{ $emptyClasses }}">No leakage reports need review in the last 14 days.</p>
+                        <p class="{{ $emptyClasses }}">No open leakage reports need review.</p>
                     @else
                         <p class="text-2xl font-extrabold tabular-nums text-gray-900">{{ \App\Support\Plural::count($leakageAttentionCount, 'report') }}</p>
-                        <p class="mt-2 text-xs text-gray-500">Flagged Review or Investigate in the last 14 days.</p>
+                        <p class="mt-2 text-xs text-gray-500">Open and flagged Review or Investigate, from manual entries, batch checks, and stock counts.</p>
                     @endif
                 </x-dashboard-card>
             @endif

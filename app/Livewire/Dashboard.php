@@ -9,7 +9,6 @@ use App\Models\User;
 use App\Services\Forecasting\ForecastOverview;
 use App\Services\Inventory\StockService;
 use App\Services\SettingsService;
-use App\Support\LeakageReportFlag;
 use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Collection;
@@ -95,13 +94,12 @@ class Dashboard extends Component
             ->values();
     }
 
+    /**
+     * Open leakage reports graded review or investigate, from any source.
+     */
     private function leakageAttentionCount(): int
     {
-        $query = LeakageReport::query()
-            ->whereDate('report_date', '>=', now()->subDays(13)->toDateString())
-            ->whereDate('report_date', '<=', now()->toDateString());
-
-        return LeakageReportFlag::applyFilter($query, 'Attention')->count();
+        return LeakageReport::query()->where('status', 'open')->whereNotNull('severity')->count();
     }
 
     /**

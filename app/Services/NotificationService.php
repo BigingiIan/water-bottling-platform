@@ -3,13 +3,20 @@
 namespace App\Services;
 
 use App\Models\ErrorEvent;
+use App\Models\Invoice;
 use App\Models\LeakageReport;
 use App\Models\Module;
+use App\Models\Order;
+use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductionSchedule;
 use App\Models\User;
 use App\Notifications\SystemNotification;
+use App\Services\Leakage\LeakageDetector;
+use App\Services\Orders\Money;
 use App\Support\LeakageReportFlag;
+use App\Support\Plural;
+use App\Support\SettingsDate;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -64,18 +71,29 @@ class NotificationService
     public function leakageReportFlagged(LeakageReport $report, ?User $actor): void
     {
         $this->guard('leakage', function () use ($report, $actor): void {
-            $flag = LeakageReportFlag::fromVolumes((float) $report->expected_volume, (float) $report->actual_volume);
+            $severity = $report->severity
+                ?? app(LeakageDetector::class)->gradeManual((string) $report->expected_volume, (string) $report->actual_volume)['severity'];
+            $flag = LeakageReportFlag::fromSeverity($severity);
 
-            if (! in_array($flag, ['Review', 'Investigate'], true) || ! $this->settings->get('notify.leakage_flag', true)) {
+            if ($severity === null || ! $this->settings->get('notify.leakage_flag', true)) {
                 return;
             }
 
-            $batchReference = 'B-'.str_pad((string) $report->batch_id, 5, '0', STR_PAD_LEFT);
+            $subject = $report->batch_id !== null
+                ? 'B-'.str_pad((string) $report->batch_id, 5, '0', STR_PAD_LEFT)
+                : trim(($report->product?->unit_type ?? 'stock').' '.($report->warehouse_location ? "at {$report->warehouse_location}" : ''));
+            $what = match ($report->finding) {
+                'process_loss' => 'Process loss',
+                'logging_gap' => 'Logging gap',
+                'stock_shrinkage' => 'Stock shrinkage',
+                default => 'Leakage',
+            };
 
             $this->send($this->usersWithModuleAccess(['inventory', 'production'], ['view', 'full']), [
                 'type' => 'leakage.flagged',
-                'title' => "Leakage flagged for {$flag} on {$batchReference}",
-                'body' => 'Discrepancy of '.number_format((float) $report->discrepancy, 2).' L against '.number_format((float) $report->expected_volume, 2).' L expected.',
+                'title' => "{$what} flagged for {$flag} on {$subject}".($report->detected_by === 'anomaly' ? ' (unusual)' : ''),
+                'body' => $report->explanation
+                    ?? 'Discrepancy of '.number_format((float) $report->discrepancy, 2).' L against '.number_format((float) $report->expected_volume, 2).' L expected.',
                 'url' => route('inventory.overview', ['tab' => 'leakage'], absolute: false),
                 'severity' => $flag === 'Investigate' ? 'critical' : 'warning',
                 'key' => "leakage:{$report->id}",
@@ -122,6 +140,62 @@ class NotificationService
                 'severity' => 'info',
                 'key' => "access:{$requester->id}:{$module->slug}",
             ], $requester);
+        });
+    }
+
+    /**
+     * @param  array<int, string>  $shortages  per-line shortage messages
+     */
+    public function orderDispatchBlocked(Order $order, array $shortages, ?User $actor): void
+    {
+        $this->guard('order', function () use ($order, $shortages, $actor): void {
+            $this->send($this->usersWithModuleAccess(['inventory'], ['view', 'full']), [
+                'type' => 'order.dispatch_blocked',
+                'title' => "{$order->order_number} can't be dispatched: stock fell short",
+                'body' => implode(' ', array_values($shortages)),
+                'url' => route('orders.show', $order, absolute: false),
+                'severity' => 'warning',
+                'key' => "order:{$order->id}:shortage",
+            ], $actor);
+        });
+    }
+
+    public function invoiceOverdue(Invoice $invoice): void
+    {
+        $this->guard('invoice', function () use ($invoice): void {
+            if (! $this->settings->get('notify.invoice_overdue', true)) {
+                return;
+            }
+
+            $daysOverdue = (int) $invoice->due_date->diffInDays(today());
+
+            $this->send($this->usersWithModuleAccess(['invoicing'], ['view', 'full']), [
+                'type' => 'invoice.overdue',
+                'title' => "{$invoice->invoice_number} for {$invoice->customer->name} is overdue",
+                'body' => Money::format($invoice->balance()).' outstanding, due '.app(SettingsDate::class)->formatDate($invoice->due_date)
+                    .' ('.Plural::count($daysOverdue, 'day').' ago).',
+                'url' => route('invoices.show', $invoice, absolute: false),
+                'severity' => $daysOverdue > 30 ? 'critical' : 'warning',
+                'key' => "invoice:{$invoice->id}:overdue",
+            ], null);
+        });
+    }
+
+    public function largePaymentRecorded(Payment $payment, ?User $actor): void
+    {
+        $this->guard('payment', function () use ($payment, $actor): void {
+            if (! $this->settings->get('notify.large_payment', true)) {
+                return;
+            }
+
+            $this->send($this->usersWithModuleAccess(['invoicing'], ['view', 'full']), [
+                'type' => 'payment.large',
+                'title' => Money::format((string) $payment->amount).' received from '.$payment->invoice->customer->name,
+                'body' => $payment->methodLabel().($payment->reference ? " {$payment->reference}" : '').' against '.$payment->invoice->invoice_number.'.',
+                'url' => route('invoices.show', $payment->invoice, absolute: false),
+                'severity' => 'info',
+                'key' => "payment:{$payment->id}",
+            ], $actor);
         });
     }
 

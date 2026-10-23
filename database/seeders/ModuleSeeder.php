@@ -22,6 +22,8 @@ class ModuleSeeder extends Seeder
             ['name' => 'Users & Roles', 'slug' => 'users-roles', 'description' => 'RBAC administration'],
             ['name' => 'Settings', 'slug' => 'settings', 'description' => 'Application settings and audit trail'],
             ['name' => 'Error Logs', 'slug' => 'error-logs', 'description' => 'Branded application errors'],
+            ['name' => 'Invoicing', 'slug' => 'invoicing', 'description' => 'Invoices and customer payments'],
+            ['name' => 'Revenue', 'slug' => 'revenue', 'description' => 'Invoiced, collected and outstanding revenue'],
         ];
 
         foreach ($modules as $module) {

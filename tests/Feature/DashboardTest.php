@@ -56,7 +56,7 @@ class DashboardTest extends TestCase
             ->assertSee('Stock alerts')
             ->assertSee('All products are above their reorder thresholds.')
             ->assertSee('Leakage review')
-            ->assertSee('No leakage reports need review in the last 14 days.')
+            ->assertSee('No open leakage reports need review.')
             ->assertSee("Tomorrow's forecast vs stock cover")
             ->assertSee('No products to forecast yet.')
             ->assertSee('Latest notifications')

@@ -10,6 +10,7 @@
             'general' => 'General',
             'operations' => 'Operations',
             'forecasting' => 'Forecasting',
+            'invoicing' => 'Invoicing',
             'notifications' => 'Notifications',
             'security' => 'Security',
             'audit' => 'Audit trail',

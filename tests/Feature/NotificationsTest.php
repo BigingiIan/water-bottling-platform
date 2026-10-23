@@ -189,7 +189,11 @@ class NotificationsTest extends TestCase
         ]);
         $this->actingAs($actor);
 
-        Livewire::test(ProductionRuns::class)->call('completeRun', $run->id);
+        Livewire::test(ProductionRuns::class)
+            ->call('completeRun', $run->id)
+            ->set('rawWaterVolume', '1000')
+            ->set('meteredBottledVolume', '850')
+            ->call('finishCompletion');
 
         $this->assertSame('production.below_target', $productionManager->notifications()->sole()->data['type']);
         $this->assertSame(0, $actor->notifications()->count());

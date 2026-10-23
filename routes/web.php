@@ -3,15 +3,22 @@
 use App\Http\Controllers\AccessRequestController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\PasswordSetController;
+use App\Http\Controllers\InvoicePdfController;
 use App\Http\Controllers\UserImpersonationController;
 use App\Livewire\Dashboard;
 use App\Livewire\ErrorLogs;
 use App\Livewire\ForecastingPage;
 use App\Livewire\InventoryOverview;
+use App\Livewire\InvoiceDetail;
+use App\Livewire\InvoicesPage;
 use App\Livewire\NotificationsPage;
+use App\Livewire\OrderDetail;
+use App\Livewire\OrderEditor;
+use App\Livewire\OrdersPage;
 use App\Livewire\ProductionHistory;
 use App\Livewire\ProductionRuns;
 use App\Livewire\ProfilePage;
+use App\Livewire\RevenuePage;
 use App\Livewire\RolePermissionMatrix;
 use App\Livewire\SettingsPage;
 use App\Livewire\StaffDirectory;
@@ -58,6 +65,20 @@ Route::middleware('auth')->group(function () {
     Route::get('/notifications', NotificationsPage::class)->name('notifications.index');
     Route::get('/profile', ProfilePage::class)->name('profile.show');
     Route::post('/access-requests', [AccessRequestController::class, 'store'])->name('access-requests.store');
+    Route::middleware('module.access:orders')->group(function () {
+        Route::get('/orders', OrdersPage::class)->name('orders.index');
+        Route::get('/orders/create', OrderEditor::class)->name('orders.create');
+        Route::get('/orders/{order}', OrderDetail::class)->name('orders.show');
+        Route::get('/orders/{order}/edit', OrderEditor::class)->name('orders.edit');
+    });
+    Route::middleware('module.access:invoicing')->group(function () {
+        Route::get('/invoices', InvoicesPage::class)->name('invoices.index');
+        Route::get('/invoices/{invoice}', InvoiceDetail::class)->name('invoices.show');
+        Route::get('/invoices/{invoice}/pdf', InvoicePdfController::class)->name('invoices.pdf');
+    });
+    Route::get('/revenue', RevenuePage::class)
+        ->middleware('module.access:revenue')
+        ->name('revenue.index');
     Route::get('/inventory', InventoryOverview::class)
         ->middleware('module.access:inventory')
         ->name('inventory.overview');

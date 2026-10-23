@@ -36,7 +36,14 @@
             'label' => 'Inventory',
             'items' => [
                 ['label' => 'Stock Overview', 'module' => 'inventory', 'icon' => 'archive-box', 'href' => route('inventory.overview')],
-                ['label' => 'Orders', 'module' => 'orders', 'icon' => 'clipboard-document-list', 'href' => '#'],
+                ['label' => 'Orders', 'module' => 'orders', 'icon' => 'clipboard-document-list', 'href' => route('orders.index')],
+            ],
+        ],
+        [
+            'label' => 'Finance',
+            'items' => [
+                ['label' => 'Invoices', 'module' => 'invoicing', 'icon' => 'document-text', 'href' => route('invoices.index')],
+                ['label' => 'Revenue', 'module' => 'revenue', 'icon' => 'banknotes', 'href' => route('revenue.index')],
             ],
         ],
         [
@@ -88,7 +95,7 @@
     </head>
     <body class="min-h-screen bg-gray-50 text-gray-800 antialiased">
         <div class="flex min-h-screen">
-            <aside class="sticky top-0 flex h-screen w-[248px] shrink-0 flex-col bg-navy-950 py-5 text-gray-300">
+            <aside class="sticky top-0 flex h-screen w-[248px] shrink-0 flex-col bg-navy-950 py-5 text-gray-300 print:hidden">
                 <a href="/" class="mb-4 flex items-center gap-2.5 border-b border-white/[0.08] px-5 pb-[22px]">
                     <x-brand-mark />
                     <span>
@@ -137,7 +144,7 @@
             </aside>
 
             <div class="flex min-w-0 flex-1 flex-col">
-                <header class="sticky top-0 z-10 border-b border-gray-200 bg-white">
+                <header class="sticky top-0 z-10 border-b border-gray-200 bg-white print:hidden">
                     <div class="flex h-[60px] items-center justify-between px-6">
                         <nav aria-label="Breadcrumb" class="flex items-center gap-1.5 text-[13px] text-gray-500">
                             <span>{{ $breadcrumbSection }}</span>
@@ -275,7 +282,7 @@
                     @endif
                 </header>
 
-                <main class="min-h-0 flex-1 p-6 sm:px-7 sm:pb-10">
+                <main class="min-h-0 flex-1 p-6 sm:px-7 sm:pb-10 print:p-0">
                     @if (session('status'))
                         <p role="status" class="mb-6 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-800">
                             <x-heroicon-o-check-circle class="size-5 shrink-0" aria-hidden="true" />

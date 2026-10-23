@@ -78,7 +78,7 @@ class RolePermissionMatrixTest extends TestCase
             ->call('cyclePermission', 999, 999)
             ->assertHasErrors(['role_id', 'module_id']);
 
-        $this->assertSame(45, DB::table('role_module_permissions')->count());
+        $this->assertSame(55, DB::table('role_module_permissions')->count());
     }
 
     public function test_role_with_no_users_and_roles_access_cannot_open_matrix(): void

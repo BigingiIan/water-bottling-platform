@@ -6,6 +6,10 @@
     <x-page-header title="Inventory" subtitle="Production, leakage, and stock activity.">
         @if ($canWriteInventory && $activeTab === 'stock')
             <x-slot:actions>
+                <button type="button" wire:click="openStockCountModal" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
+                    <x-heroicon-o-clipboard-document-check class="size-4" aria-hidden="true" />
+                    Record stock count
+                </button>
                 <button type="button" wire:click="openAdjustmentModal" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
                     <x-heroicon-o-adjustments-horizontal class="size-4" aria-hidden="true" />
                     Adjust Stock
@@ -292,36 +296,78 @@
             <div class="border-t border-gray-100 px-[18px] py-3">{{ $batchRows->links() }}</div>
         </section>
     @elseif ($activeTab === 'leakage')
+        <section aria-labelledby="loss-trend-heading" class="rounded-lg border border-gray-200 bg-white p-[18px]">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <div>
+                    <h2 id="loss-trend-heading" class="text-sm font-bold text-gray-900">Process loss trend</h2>
+                    <p class="mt-0.5 text-xs text-gray-500">Loss beyond the normal process loss, per product, last 30 completed batches.</p>
+                </div>
+                <p class="flex items-center gap-3 text-[11px] text-gray-500">
+                    <span class="inline-flex items-center gap-1.5"><svg width="16" height="6" aria-hidden="true"><line x1="1" y1="3" x2="15" y2="3" stroke="#94a3b8" stroke-width="1" /></svg>0% = normal loss ({{ number_format($normalLossPercent, 1) }}%)</span>
+                    <span class="inline-flex items-center gap-1.5"><svg width="16" height="6" aria-hidden="true"><line x1="1" y1="3" x2="15" y2="3" stroke="#d97706" stroke-width="1" stroke-dasharray="3 3" /></svg>Review at {{ number_format($reviewPercent, 1) }}% beyond normal</span>
+                </p>
+            </div>
+            @if ($lossTrends->isEmpty())
+                <p class="mt-3 text-sm text-gray-500">Loss trends appear once production runs are completed with their water volumes.</p>
+            @else
+                <ul class="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                    @foreach ($lossTrends as $sku => $values)
+                        <li wire:key="loss-trend-{{ $sku }}" class="min-w-0">
+                            <p class="flex items-baseline justify-between text-xs"><span class="font-bold text-gray-800">{{ $sku }}</span><span class="tabular-nums text-gray-500">latest +{{ number_format(end($values), 1) }}% · {{ \App\Support\Plural::count(count($values), 'batch') }}</span></p>
+                            <x-loss-sparkline :values="$values" :label="$sku" :normal="$normalLossPercent" :review="$reviewPercent" class="mt-1" />
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+        </section>
+
         <section aria-labelledby="leakage-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white">
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-[18px] py-3.5">
                 <div>
                     <h2 id="leakage-heading" class="text-sm font-bold text-gray-900">Leakage reports</h2>
-                    <p class="mt-0.5 text-xs text-gray-500">Discrepancy is calculated from expected and actual volumes.</p>
+                    <p class="mt-0.5 text-xs text-gray-500">Entered by hand, raised when a run is completed (process loss), or raised by a stock count (shrinkage).</p>
                 </div>
                 @if ($canWriteInventory)
                     <button type="button" wire:click="openLeakageReportModal" class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700"><x-heroicon-o-plus class="size-4" aria-hidden="true" />New Report</button>
                 @endif
             </div>
             <div class="flex flex-wrap items-center gap-2 border-b border-gray-100 bg-gray-50 px-[18px] py-3">
-                <label for="leakage-flag-filter" class="sr-only">Filter by leakage flag</label>
+                <label for="leakage-flag-filter" class="sr-only">Filter by severity</label>
                 <select id="leakage-flag-filter" wire:model.live="leakageFlagFilter" class="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700">
-                    <option value="">All flags</option>
+                    <option value="">All severities</option>
                     <option value="Normal">Normal</option>
                     <option value="Review">Review</option>
                     <option value="Investigate">Investigate</option>
                 </select>
+                <label for="leakage-source-filter" class="sr-only">Filter by source</label>
+                <select id="leakage-source-filter" wire:model.live="leakageSourceFilter" class="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700">
+                    <option value="">All sources</option>
+                    <option value="manual">Manual</option>
+                    <option value="process">Process loss</option>
+                    <option value="stock">Stock count</option>
+                </select>
+                <label for="leakage-status-filter" class="sr-only">Filter by status</label>
+                <select id="leakage-status-filter" wire:model.live="leakageStatusFilter" class="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700">
+                    <option value="">All statuses</option>
+                    <option value="open">Open</option>
+                    <option value="acknowledged">Acknowledged</option>
+                    <option value="resolved">Resolved</option>
+                </select>
                 <span class="ml-auto text-xs text-gray-500">{{ \App\Support\Plural::count($leakageReports->total(), 'report') }}</span>
             </div>
             <div class="overflow-x-auto">
-                <table class="w-full min-w-[800px] border-collapse text-left">
+                <table class="w-full min-w-[1080px] border-collapse text-left">
+                    <caption class="sr-only">Leakage reports with source, loss percentage, severity, status, and explanation.</caption>
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Report date / batch</th>
-                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Expected</th>
-                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Actual</th>
-                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Discrepancy</th>
-                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Percentage</th>
+                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Date / subject</th>
+                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Source</th>
+                            <th scope="col" class="px-[18px] py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Loss</th>
+                            <th scope="col" class="px-[18px] py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">z</th>
                             <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Flag</th>
+                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Status</th>
+                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Explanation</th>
+                            <th scope="col" class="px-[18px] py-2.5"><span class="sr-only">Actions</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -333,26 +379,80 @@
                                     'Review' => 'bg-amber-50 text-[#b45309]',
                                     default => 'bg-green-50 text-[#15803d]',
                                 };
-                                $percentage = (float) $report->expected_volume > 0
-                                    ? abs((float) $report->discrepancy) / (float) $report->expected_volume * 100
-                                    : 0;
+                                $statusClass = match ($report->status) {
+                                    'resolved' => 'bg-green-50 text-[#15803d]',
+                                    'acknowledged' => 'bg-blue-50 text-[#1d4ed8]',
+                                    default => 'bg-gray-100 text-gray-700',
+                                };
+                                $sourceLabel = match ($report->finding) {
+                                    'process_loss' => 'Process loss',
+                                    'logging_gap' => 'Logging gap',
+                                    'stock_shrinkage' => 'Stock shrinkage',
+                                    default => 'Manual',
+                                };
+                                $subject = $report->batch_id !== null
+                                    ? 'B-'.str_pad((string) $report->batch_id, 5, '0', STR_PAD_LEFT)
+                                    : trim(($report->product?->unit_type ?? '').' '.($report->warehouse_location ? '@ '.$report->warehouse_location : ''));
                             @endphp
-                            <tr wire:key="leakage-report-{{ $report->id }}" class="border-t border-gray-100 text-[13px] text-gray-700">
-                                <td class="px-[18px] py-3"><span class="font-medium text-gray-900">{{ app(\App\Support\SettingsDate::class)->formatDate($report->report_date) }}</span><span class="mt-0.5 block font-mono text-[11px] text-gray-500">B-{{ str_pad((string) $report->batch_id, 5, '0', STR_PAD_LEFT) }}</span></td>
-                                <td class="px-[18px] py-3 tabular-nums">{{ number_format((float) $report->expected_volume, 2) }} L</td>
-                                <td class="px-[18px] py-3 tabular-nums">{{ number_format((float) $report->actual_volume, 2) }} L</td>
-                                <td class="px-[18px] py-3 font-mono tabular-nums {{ (float) $report->discrepancy < 0 ? 'text-red-700' : 'text-green-700' }}">{{ number_format((float) $report->discrepancy, 2) }} L</td>
-                                <td class="px-[18px] py-3 tabular-nums">{{ number_format($percentage, 2) }}%</td>
-                                <td class="px-[18px] py-3"><span class="rounded-full px-2.5 py-1 text-[11px] font-bold {{ $flagClass }}">{{ $flag }}</span></td>
+                            <tr wire:key="leakage-report-{{ $report->id }}" class="border-t border-gray-100 align-top text-[13px] text-gray-700">
+                                <td class="px-[18px] py-3">
+                                    <span class="font-medium text-gray-900">{{ app(\App\Support\SettingsDate::class)->formatDate($report->report_date) }}</span>
+                                    <span class="mt-0.5 block font-mono text-[11px] text-gray-500">{{ $subject }}{{ $report->product && $report->batch_id ? ' · '.$report->product->unit_type : '' }}</span>
+                                </td>
+                                <td class="px-[18px] py-3">
+                                    <span class="whitespace-nowrap font-medium text-gray-800">{{ $sourceLabel }}</span>
+                                    @if ($report->detected_by === 'anomaly')
+                                        <span class="mt-1 block w-fit rounded-full bg-purple-100 px-2 py-0.5 text-[10.5px] font-bold text-[#7e22ce]">Unusual</span>
+                                    @endif
+                                </td>
+                                <td class="px-[18px] py-3 text-right tabular-nums">{{ $report->loss_percent === null ? '—' : number_format((float) $report->loss_percent, 2).'%' }}</td>
+                                <td class="px-[18px] py-3 text-right tabular-nums text-gray-600">{{ $report->z_score === null ? '—' : number_format((float) $report->z_score, 1) }}</td>
+                                <td class="px-[18px] py-3"><span class="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold {{ $flagClass }}">{{ $flag }}</span></td>
+                                <td class="px-[18px] py-3">
+                                    <span class="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold {{ $statusClass }}">{{ ucfirst($report->status) }}</span>
+                                    @if ($report->status === 'resolved' && $report->resolver)
+                                        <span class="mt-1 block text-[11px] text-gray-500">by {{ $report->resolver->name }}</span>
+                                    @endif
+                                </td>
+                                <td class="max-w-[420px] px-[18px] py-3 text-[12.5px] leading-5 text-gray-600">
+                                    {{ $report->explanation ?? '—' }}
+                                    @if ($report->resolution_note)
+                                        <span class="mt-1 block text-gray-500"><span class="font-semibold text-gray-700">Note:</span> {{ $report->resolution_note }}</span>
+                                    @endif
+                                </td>
+                                <td class="whitespace-nowrap px-[18px] py-3 text-right">
+                                    @if ($canWriteInventory && $report->status !== 'resolved')
+                                        @if ($report->status === 'open')
+                                            <button type="button" wire:click="openReviewModal({{ $report->id }}, 'acknowledge')" class="text-xs font-semibold text-blue-700 hover:text-blue-900">Acknowledge</button>
+                                            <span class="mx-1 text-gray-300" aria-hidden="true">|</span>
+                                        @endif
+                                        <button type="button" wire:click="openReviewModal({{ $report->id }}, 'resolve')" class="text-xs font-semibold text-blue-700 hover:text-blue-900">Resolve</button>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="px-4 py-8 text-center text-sm text-gray-500">No leakage reports match this filter.</td></tr>
+                            <tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No leakage reports match these filters.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
             <div class="border-t border-gray-100 px-[18px] py-3">{{ $leakageReports->links() }}</div>
         </section>
+
+        @if ($reviewingReport)
+            <x-modal-dialog id="leakage-review" :title="$reviewAction === 'resolve' ? 'Resolve leakage report' : 'Acknowledge leakage report'" close="closeReviewModal">
+                <p class="text-[13px] text-gray-600">{{ $reviewingReport->explanation }}</p>
+                <div>
+                    <label for="leakage-review-note" class="mb-1.5 block text-xs font-semibold text-gray-600">{{ $reviewAction === 'resolve' ? 'Resolution note' : 'Note (optional)' }}</label>
+                    <textarea id="leakage-review-note" rows="3" wire:model="reviewNote" class="w-full rounded-md border border-gray-300 px-2.5 py-2 text-[13px] text-gray-800" placeholder="{{ $reviewAction === 'resolve' ? 'What was found and what was done' : 'Who is looking into it' }}"></textarea>
+                    @error('reviewNote') <p role="alert" class="mt-1 text-[11px] text-red-600">{{ $message }}</p> @enderror
+                </div>
+                <x-slot:footer>
+                    <button type="button" wire:click="closeReviewModal" class="rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700">Cancel</button>
+                    <button type="button" wire:click="saveReview" class="rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700">{{ $reviewAction === 'resolve' ? 'Resolve' : 'Acknowledge' }}</button>
+                </x-slot:footer>
+            </x-modal-dialog>
+        @endif
     @else
         <section aria-labelledby="movement-list-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white">
             <div class="border-b border-gray-200 px-[18px] py-3.5">
@@ -578,5 +678,54 @@
                 </div>
             </section>
         </div>
+    @endif
+
+    @if ($stockCountOpen && isset($adjustableStockLines))
+        @php
+            $countLocations = $stockCountProductId === ''
+                ? collect()
+                : $adjustableStockLines->where('product_id', (int) $stockCountProductId)->pluck('warehouse_location')->unique()->values();
+        @endphp
+        <x-modal-dialog id="stock-count" title="Record stock count" close="closeStockCountModal">
+            <p class="text-[13px] text-gray-600">Counted stock replaces the system level. Any shortfall against what the recorded movements say should be there is checked for shrinkage.</p>
+            <div class="grid gap-3 sm:grid-cols-2">
+                <div>
+                    <label for="stock-count-product" class="mb-1.5 block text-xs font-semibold text-gray-600">Product</label>
+                    <select id="stock-count-product" wire:model.live="stockCountProductId" class="w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-[13px] text-gray-800">
+                        <option value="">Select product…</option>
+                        @foreach ($adjustableStockLines->pluck('product')->unique('id')->sortBy('unit_type') as $countProduct)
+                            <option value="{{ $countProduct->id }}">{{ $countProduct->unit_type }} · {{ $countProduct->name }}</option>
+                        @endforeach
+                    </select>
+                    @error('stockCountProductId') <p role="alert" class="mt-1 text-[11px] text-red-600">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label for="stock-count-location" class="mb-1.5 block text-xs font-semibold text-gray-600">Location</label>
+                    <select id="stock-count-location" wire:model="stockCountLocation" @disabled($countLocations->isEmpty()) class="w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-[13px] text-gray-800 disabled:bg-gray-50">
+                        <option value="">{{ $countLocations->contains(null) || $countLocations->isEmpty() ? 'No location' : 'Select location…' }}</option>
+                        @foreach ($countLocations->filter() as $countLocation)
+                            <option value="{{ $countLocation }}">{{ $countLocation }}</option>
+                        @endforeach
+                    </select>
+                    @error('stockCountLocation') <p role="alert" class="mt-1 text-[11px] text-red-600">{{ $message }}</p> @enderror
+                </div>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2">
+                <div>
+                    <label for="stock-count-units" class="mb-1.5 block text-xs font-semibold text-gray-600">Counted units</label>
+                    <input id="stock-count-units" type="number" min="0" step="1" wire:model="stockCountUnits" class="w-full rounded-md border border-gray-300 px-2.5 py-2 text-[13px] text-gray-800">
+                    @error('stockCountUnits') <p role="alert" class="mt-1 text-[11px] text-red-600">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label for="stock-count-note" class="mb-1.5 block text-xs font-semibold text-gray-600">Note</label>
+                    <input id="stock-count-note" type="text" wire:model="stockCountNote" placeholder="Monthly count, cycle count…" class="w-full rounded-md border border-gray-300 px-2.5 py-2 text-[13px] text-gray-800">
+                    @error('stockCountNote') <p role="alert" class="mt-1 text-[11px] text-red-600">{{ $message }}</p> @enderror
+                </div>
+            </div>
+            <x-slot:footer>
+                <button type="button" wire:click="closeStockCountModal" class="rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700">Cancel</button>
+                <button type="button" wire:click="saveStockCount" wire:loading.attr="disabled" class="rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700 disabled:opacity-60">Record count</button>
+            </x-slot:footer>
+        </x-modal-dialog>
     @endif
 </div>

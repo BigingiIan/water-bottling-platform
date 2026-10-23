@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Exceptions\Inventory\InsufficientStockException;
 use App\Exceptions\Inventory\NonIntegerStockLevelException;
+use App\Models\AuditLog;
 use App\Models\LeakageReport;
 use App\Models\Product;
 use App\Models\ProductionBatch;
@@ -11,6 +12,9 @@ use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\WarehouseStock;
 use App\Services\Inventory\StockService;
+use App\Services\Leakage\AnomalyAssessment;
+use App\Services\Leakage\LeakageDetector;
+use App\Services\Leakage\StockCountService;
 use App\Services\NotificationService;
 use App\Services\SettingsService;
 use App\Services\UserPreferenceService;
@@ -19,9 +23,12 @@ use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use InvalidArgumentException;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -45,6 +52,12 @@ class InventoryOverview extends Component
 
     #[Url(except: '')]
     public string $leakageFlagFilter = '';
+
+    #[Url(except: '')]
+    public string $leakageSourceFilter = '';
+
+    #[Url(except: '')]
+    public string $leakageStatusFilter = '';
 
     #[Url(except: '')]
     public string $movementTypeFilter = '';
@@ -95,6 +108,24 @@ class InventoryOverview extends Component
 
     public string $leakageActualVolume = '';
 
+    public bool $stockCountOpen = false;
+
+    public string $stockCountProductId = '';
+
+    public string $stockCountLocation = '';
+
+    public string $stockCountUnits = '';
+
+    public string $stockCountNote = '';
+
+    #[Locked]
+    public ?int $reviewingReportId = null;
+
+    #[Locked]
+    public string $reviewAction = 'acknowledge';
+
+    public string $reviewNote = '';
+
     public function mount(): void
     {
         if (! in_array($this->activeTab, ['stock', 'batches', 'leakage', 'movements'], true)) {
@@ -126,7 +157,7 @@ class InventoryOverview extends Component
             $this->resetPage(pageName: 'batchesPage');
         }
 
-        if ($property === 'leakageFlagFilter') {
+        if (in_array($property, ['leakageFlagFilter', 'leakageSourceFilter', 'leakageStatusFilter'], true)) {
             $this->resetPage(pageName: 'leakagePage');
         }
 
@@ -169,14 +200,113 @@ class InventoryOverview extends Component
         $report = LeakageReport::create([
             'batch_id' => $validated['leakageBatchId'],
             'report_date' => today()->toDateString(),
-            'expected_volume' => $expected,
-            'actual_volume' => $actual,
+            'expected_volume' => $validated['leakageExpectedVolume'],
+            'actual_volume' => $validated['leakageActualVolume'],
             'discrepancy' => $actual - $expected,
+            'source' => 'manual',
         ]);
         app(NotificationService::class)->leakageReportFlagged($report, auth()->user());
 
         session()->flash('inventorySuccess', 'Leakage report recorded.');
         $this->closeLeakageReportModal();
+    }
+
+    public function openStockCountModal(): void
+    {
+        $this->authorizeInventoryWrite();
+        $this->resetValidation();
+        $this->reset(['stockCountProductId', 'stockCountLocation', 'stockCountUnits', 'stockCountNote']);
+        $this->stockCountOpen = true;
+        $this->adjustmentOpen = false;
+        $this->stockInOpen = false;
+    }
+
+    public function closeStockCountModal(): void
+    {
+        $this->stockCountOpen = false;
+        $this->resetValidation();
+    }
+
+    /**
+     * Records a physical count, corrects stock to it and checks the gap for shrinkage.
+     */
+    public function saveStockCount(StockCountService $counts): void
+    {
+        $user = $this->authorizeInventoryWrite();
+        $validated = $this->validate([
+            'stockCountProductId' => ['required', 'integer', Rule::exists('products', 'id')],
+            'stockCountLocation' => ['nullable', 'string', 'max:255'],
+            'stockCountUnits' => ['required', 'integer', 'min:0', 'max:100000000'],
+            'stockCountNote' => ['nullable', 'string', 'max:255'],
+        ], [], [
+            'stockCountProductId' => 'product',
+            'stockCountUnits' => 'counted units',
+        ]);
+
+        try {
+            $result = $counts->record(
+                Product::query()->findOrFail((int) $validated['stockCountProductId']),
+                $validated['stockCountLocation'] === '' || $validated['stockCountLocation'] === null ? null : $validated['stockCountLocation'],
+                (int) $validated['stockCountUnits'],
+                $validated['stockCountNote'] ?: null,
+                $user,
+            );
+        } catch (InvalidArgumentException $exception) {
+            $this->addError('stockCountLocation', $exception->getMessage());
+
+            return;
+        }
+
+        $assessment = $result['assessment'];
+        session()->flash('inventorySuccess', $assessment->shrinkageUnits > 0
+            ? 'Stock count recorded. '.$assessment->explanation()
+            : 'Stock count recorded. The count matches or exceeds the expected level.');
+        $this->closeStockCountModal();
+    }
+
+    public function openReviewModal(int $reportId, string $action): void
+    {
+        $this->authorizeInventoryWrite();
+        abort_unless(in_array($action, ['acknowledge', 'resolve'], true), 404);
+
+        $report = LeakageReport::query()->findOrFail($reportId);
+        abort_if($report->status === 'resolved', 404);
+
+        $this->resetValidation();
+        $this->reviewingReportId = $report->id;
+        $this->reviewAction = $action;
+        $this->reviewNote = (string) $report->resolution_note;
+    }
+
+    public function closeReviewModal(): void
+    {
+        $this->reviewingReportId = null;
+        $this->resetValidation();
+    }
+
+    public function saveReview(): void
+    {
+        $user = $this->authorizeInventoryWrite();
+        $validated = $this->validate([
+            'reviewNote' => [$this->reviewAction === 'resolve' ? 'required' : 'nullable', 'string', 'max:2000'],
+        ], [], ['reviewNote' => 'note']);
+        $report = LeakageReport::query()->findOrFail((int) $this->reviewingReportId);
+        $from = $report->status;
+
+        $report->update($this->reviewAction === 'resolve'
+            ? ['status' => 'resolved', 'resolution_note' => $validated['reviewNote'], 'resolved_by' => $user->id, 'resolved_at' => now()]
+            : ['status' => 'acknowledged', 'resolution_note' => $validated['reviewNote'] ?: $report->resolution_note, 'acknowledged_by' => $user->id, 'acknowledged_at' => now()]);
+
+        AuditLog::create([
+            'user_id' => $user->id,
+            'action' => 'leakage.'.($this->reviewAction === 'resolve' ? 'resolved' : 'acknowledged'),
+            'table_name' => 'leakage_reports',
+            'old_values' => ['leakage_report_id' => $report->id, 'status' => $from],
+            'new_values' => ['leakage_report_id' => $report->id, 'status' => $report->status, 'note' => $report->resolution_note],
+        ]);
+
+        session()->flash('inventorySuccess', $this->reviewAction === 'resolve' ? 'Leakage report resolved.' : 'Leakage report acknowledged.');
+        $this->closeReviewModal();
     }
 
     public function openAdjustmentModal(?int $stockId = null): void
@@ -347,6 +477,7 @@ class InventoryOverview extends Component
             ? ProductionBatch::query()->orderByDesc('batch_date')->orderByDesc('id')->get()
             : collect();
         $attentionQuery = LeakageReport::query()
+            ->where('status', 'open')
             ->whereDate('report_date', '>=', now()->subDays(13)->toDateString())
             ->whereDate('report_date', '<=', now()->toDateString());
         LeakageReportFlag::applyFilter($attentionQuery, 'Attention');
@@ -378,14 +509,20 @@ class InventoryOverview extends Component
 
         if ($this->activeTab === 'leakage') {
             $leakageQuery = LeakageReport::query()
-                ->with('batch')
+                ->with(['batch', 'product:id,unit_type', 'productionLine:id,name', 'resolver:id,name', 'acknowledger:id,name'])
                 ->when(in_array($this->leakageFlagFilter, ['Normal', 'Review', 'Investigate'], true), function (Builder $query): void {
                     LeakageReportFlag::applyFilter($query, $this->leakageFlagFilter);
                 })
+                ->when(in_array($this->leakageSourceFilter, ['manual', 'process', 'stock'], true), fn (Builder $query): Builder => $query->where('source', $this->leakageSourceFilter))
+                ->when(in_array($this->leakageStatusFilter, ['open', 'acknowledged', 'resolved'], true), fn (Builder $query): Builder => $query->where('status', $this->leakageStatusFilter))
                 ->orderByDesc('report_date')
                 ->orderByDesc('id');
 
             $viewData['leakageReports'] = $leakageQuery->paginate($this->pageSize(15), pageName: 'leakagePage');
+            $viewData['lossTrends'] = $this->lossTrends();
+            $viewData['reviewingReport'] = $this->reviewingReportId === null ? null : LeakageReport::query()->find($this->reviewingReportId);
+            $viewData['normalLossPercent'] = (float) app(LeakageDetector::class)->normalLossPercent();
+            $viewData['reviewPercent'] = (float) app(LeakageDetector::class)->reviewPercent();
 
             return view('livewire.inventory-overview', $viewData);
         }
@@ -536,6 +673,25 @@ class InventoryOverview extends Component
         }
 
         return $parsed->format('Y-m-d') === $date ? $date : null;
+    }
+
+    /**
+     * Process loss % of each product's last 30 completed batches, oldest first, for the trend sparklines.
+     *
+     * @return Collection<string, array<int, float>>
+     */
+    private function lossTrends(): Collection
+    {
+        return DB::table('production_batches')
+            ->join('production_schedules', 'production_schedules.id', '=', 'production_batches.production_schedule_id')
+            ->where('production_batches.status', 'completed')
+            ->whereNotNull('production_batches.process_loss_percent')
+            ->orderByDesc('production_batches.completed_at')
+            ->orderByDesc('production_batches.id')
+            ->get(['production_schedules.product_sku', 'production_batches.process_loss_percent'])
+            ->groupBy('product_sku')
+            ->map(fn (Collection $rows): array => $rows->take(AnomalyAssessment::BASELINE_BATCHES)->reverse()->pluck('process_loss_percent')->map(fn ($value): float => (float) $value)->values()->all())
+            ->sortKeys();
     }
 
     private function pageSize(int $pageDefault): int

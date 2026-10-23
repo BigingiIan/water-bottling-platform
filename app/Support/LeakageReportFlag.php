@@ -2,56 +2,41 @@
 
 namespace App\Support;
 
-use App\Services\SettingsService;
+use App\Services\Leakage\LeakageDetector;
 use Illuminate\Database\Eloquent\Builder;
 
+/**
+ * Display labels for leakage severity. Thresholds and formulas live in LeakageDetector.
+ */
 class LeakageReportFlag
 {
     public static function fromVolumes(float $expected, float $actual): string
     {
-        if ($expected <= 0) {
-            return 'Normal';
-        }
+        $grading = app(LeakageDetector::class)->gradeManual(sprintf('%.3F', $expected), sprintf('%.3F', $actual));
 
-        $percentage = abs($actual - $expected) / $expected * 100;
-        $settings = app(SettingsService::class);
-        $reviewPercent = $settings->get('leakage.review_percent', 2.0);
-        $investigatePercent = $settings->get('leakage.investigate_percent', 5.0);
-
-        if ($percentage < $reviewPercent) {
-            return 'Normal';
-        }
-
-        if ($percentage <= $investigatePercent) {
-            return 'Review';
-        }
-
-        return 'Investigate';
+        return self::fromSeverity($grading['severity']);
     }
 
+    public static function fromSeverity(?string $severity): string
+    {
+        return match ($severity) {
+            'investigate' => 'Investigate',
+            'review' => 'Review',
+            default => 'Normal',
+        };
+    }
+
+    /**
+     * Filters on the severity stored when the report was graded.
+     */
     public static function applyFilter(Builder $query, ?string $flag): Builder
     {
-        if (! in_array($flag, ['Normal', 'Review', 'Investigate', 'Attention'], true)) {
-            return $query;
-        }
-
-        $percentage = '(ABS(discrepancy) * 100.0 / expected_volume)';
-        $settings = app(SettingsService::class);
-        $reviewPercent = $settings->get('leakage.review_percent', 2.0);
-        $investigatePercent = $settings->get('leakage.investigate_percent', 5.0);
-
         return match ($flag) {
-            'Normal' => $query->where(function (Builder $query) use ($percentage, $reviewPercent): void {
-                $query->where('expected_volume', '<=', 0)
-                    ->orWhereRaw("{$percentage} < CAST(? AS DECIMAL)", [$reviewPercent]);
-            }),
-            'Review' => $query->where('expected_volume', '>', 0)
-                ->whereRaw("{$percentage} >= CAST(? AS DECIMAL)", [$reviewPercent])
-                ->whereRaw("{$percentage} <= CAST(? AS DECIMAL)", [$investigatePercent]),
-            'Investigate' => $query->where('expected_volume', '>', 0)
-                ->whereRaw("{$percentage} > CAST(? AS DECIMAL)", [$investigatePercent]),
-            'Attention' => $query->where('expected_volume', '>', 0)
-                ->whereRaw("{$percentage} >= CAST(? AS DECIMAL)", [$reviewPercent]),
+            'Normal' => $query->whereNull('severity'),
+            'Review' => $query->where('severity', 'review'),
+            'Investigate' => $query->where('severity', 'investigate'),
+            'Attention' => $query->whereNotNull('severity'),
+            default => $query,
         };
     }
 }

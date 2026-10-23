@@ -39,8 +39,8 @@ class RbacSeederTest extends TestCase
         $this->seed();
 
         $this->assertDatabaseCount('roles', 5);
-        $this->assertDatabaseCount('modules', 9);
-        $this->assertDatabaseCount('role_module_permissions', 45);
+        $this->assertDatabaseCount('modules', 11);
+        $this->assertDatabaseCount('role_module_permissions', 55);
         $this->assertSame(
             [
                 'Administrator',
@@ -59,8 +59,10 @@ class RbacSeederTest extends TestCase
                 'Error Logs',
                 'Forecasting',
                 'Inventory',
+                'Invoicing',
                 'Orders',
                 'Production',
+                'Revenue',
                 'Settings',
                 'Users & Roles',
             ],
@@ -69,7 +71,7 @@ class RbacSeederTest extends TestCase
 
         $administrator = Role::query()->where('slug', 'administrator')->firstOrFail();
         $this->assertSame(
-            9,
+            11,
             $administrator->modules()->wherePivot('access_level', 'full')->count(),
         );
         $this->assertSame(
@@ -138,8 +140,8 @@ class RbacSeederTest extends TestCase
         $this->seed($seeders);
 
         $this->assertDatabaseCount('roles', 5);
-        $this->assertDatabaseCount('modules', 9);
-        $this->assertDatabaseCount('role_module_permissions', 45);
-        $this->assertSame(45, DB::table('role_module_permissions')->count());
+        $this->assertDatabaseCount('modules', 11);
+        $this->assertDatabaseCount('role_module_permissions', 55);
+        $this->assertSame(55, DB::table('role_module_permissions')->count());
     }
 }

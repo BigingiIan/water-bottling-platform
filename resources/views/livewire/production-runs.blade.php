@@ -5,6 +5,13 @@
         :subtitle="'Open runs for '.app(\App\Support\SettingsDate::class)->formatDate($this->selectedDate).' · '.number_format($totalActual).' / '.number_format($totalTarget).' units logged'"
     />
 
+    @if ($completionResult)
+        <p role="status" class="mb-4 flex items-start gap-2 rounded-md border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-800">
+            <x-heroicon-o-check-circle class="mt-px size-5 shrink-0" aria-hidden="true" />
+            <span>{{ $completionResult }} @if (str_contains($completionResult, 'leakage report')) <a href="{{ route('inventory.overview', ['tab' => 'leakage']) }}" class="font-semibold underline">View leakage reports</a> @endif</span>
+        </p>
+    @endif
+
     <section aria-labelledby="runs-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white">
         <h2 id="runs-heading" class="sr-only">Open production runs for {{ app(\App\Support\SettingsDate::class)->formatDate($this->selectedDate) }}</h2>
 
@@ -93,21 +100,12 @@
                                                 class="rounded-md bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700"
                                             >Start</button>
                                         @elseif ($run->status === 'active')
-                                            @if ($confirmingCompletion === $run->id)
-                                                <button
-                                                    type="button"
-                                                    wire:click="completeRun({{ $run->id }})"
-                                                    aria-label="Confirm completing {{ $run->product_sku }} at {{ $time }} with no logs"
-                                                    class="rounded-md bg-amber-500 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-600"
-                                                >Confirm</button>
-                                            @else
-                                                <button
-                                                    type="button"
-                                                    wire:click="completeRun({{ $run->id }})"
-                                                    aria-label="Complete {{ $run->product_sku }} at {{ $time }}"
-                                                    class="rounded-md bg-green-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700"
-                                                >Complete</button>
-                                            @endif
+                                            <button
+                                                type="button"
+                                                wire:click="completeRun({{ $run->id }})"
+                                                aria-label="Complete {{ $run->product_sku }} at {{ $time }}"
+                                                class="rounded-md bg-green-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-green-700"
+                                            >Complete</button>
                                         @endif
                                         <button
                                             type="button"
@@ -190,6 +188,41 @@
     @unless ($canLog)
         <p class="mt-4 rounded-md bg-gray-100 px-3.5 py-2 text-center text-[13px] font-medium text-gray-500">Read-only access — logging requires full production access.</p>
     @endunless
+
+    @if ($completingRunId)
+        @php
+            $completingRun = $runs->firstWhere('id', $completingRunId) ?? \App\Models\ProductionSchedule::query()->withSum('logs', 'units_logged')->find($completingRunId);
+            $completingUnits = (int) ($completingRun?->logs_sum_units_logged ?? 0);
+        @endphp
+        <x-modal-dialog id="complete-run" title="Complete run" close="closeCompletion">
+            <p class="text-[13px] text-gray-600">
+                <span class="font-semibold text-gray-900">{{ $completingRun?->product_sku }}</span> on {{ $completingRun?->productionLine?->name ?? 'its line' }}
+                · {{ \App\Support\Plural::count($completingUnits, 'unit') }} logged. Completing the run completes its batch and checks it for process loss.
+            </p>
+            @if ($completingUnits === 0)
+                <p role="alert" class="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-900">
+                    <x-heroicon-o-exclamation-triangle class="mt-px size-4 shrink-0" aria-hidden="true" />
+                    No production has been logged on this run, so all the water will count as lost.
+                </p>
+            @endif
+            <div class="grid gap-3 sm:grid-cols-2">
+                <div>
+                    <label for="complete-raw-water" class="mb-1.5 block text-xs font-semibold text-gray-600">Raw water used (L)</label>
+                    <input id="complete-raw-water" type="number" min="0" step="0.001" wire:model="rawWaterVolume" class="w-full rounded-md border border-gray-300 px-2.5 py-2 text-[13px] text-gray-800">
+                    @error('rawWaterVolume') <p role="alert" class="mt-1 text-[11px] text-red-600">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label for="complete-metered" class="mb-1.5 block text-xs font-semibold text-gray-600">Metered bottled volume (L)</label>
+                    <input id="complete-metered" type="number" min="0" step="0.001" wire:model="meteredBottledVolume" class="w-full rounded-md border border-gray-300 px-2.5 py-2 text-[13px] text-gray-800">
+                    @error('meteredBottledVolume') <p role="alert" class="mt-1 text-[11px] text-red-600">{{ $message }}</p> @enderror
+                </div>
+            </div>
+            <x-slot:footer>
+                <button type="button" wire:click="closeCompletion" class="rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700">Cancel</button>
+                <button type="button" wire:click="finishCompletion" wire:loading.attr="disabled" class="rounded-md bg-green-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-green-700 disabled:opacity-60">Complete run</button>
+            </x-slot:footer>
+        </x-modal-dialog>
+    @endif
 
     <livewire:log-production-modal />
 </div>
