@@ -6,6 +6,7 @@ use App\Models\ProductionLine;
 use App\Models\ProductionSchedule;
 use App\Models\User;
 use App\Services\MLForecastClient;
+use App\Services\SettingsService;
 use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -238,6 +239,10 @@ class ProductionScheduleTable extends Component
      */
     private function forecastComparison(): ?array
     {
+        if (! app(SettingsService::class)->get('forecast.enabled', true)) {
+            return null;
+        }
+
         $active = ProductionSchedule::query()
             ->whereDate('scheduled_date', $this->selectedDate)
             ->where('status', 'active')

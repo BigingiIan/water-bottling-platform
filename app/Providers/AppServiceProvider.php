@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\Models\User;
+use App\Services\SettingsService;
+use App\Services\UserPreferenceService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\View;
@@ -16,7 +18,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->scoped(SettingsService::class);
+        $this->app->scoped(UserPreferenceService::class);
     }
 
     /**
@@ -58,6 +61,8 @@ class AppServiceProvider extends ServiceProvider
                     ->all()
                 : [];
 
+            $unreadNotificationCount = $user instanceof User ? $user->unreadNotifications()->count() : 0;
+
             $view->with(compact(
                 'accessibleModuleSlugs',
                 'canImpersonate',
@@ -65,6 +70,7 @@ class AppServiceProvider extends ServiceProvider
                 'impersonationUsers',
                 'impersonator',
                 'isImpersonating',
+                'unreadNotificationCount',
             ));
         });
     }

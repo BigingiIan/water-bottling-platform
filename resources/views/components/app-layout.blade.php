@@ -52,8 +52,7 @@
                 ['label' => 'Users & Roles', 'module' => 'users-roles', 'icon' => '🛡', 'href' => route('staff.directory')],
                 ['label' => 'Roles & Permissions', 'module' => 'users-roles', 'requiredAccess' => 'full', 'icon' => '🔐', 'href' => route('staff.permissions')],
                 ['label' => 'Error Logs', 'module' => 'error-logs', 'icon' => '⚠', 'href' => route('errors.index')],
-                ['label' => 'Audit Logs', 'module' => 'audit-logs', 'icon' => '🕘', 'href' => '#'],
-                ['label' => 'Settings', 'module' => 'settings', 'icon' => '⚙', 'href' => '#'],
+                ['label' => 'Settings', 'module' => 'settings', 'icon' => '⚙', 'href' => route('settings.index')],
             ],
         ],
     ];
@@ -173,20 +172,82 @@
                                 <input type="search" placeholder="Search users, roles…" class="min-w-0 flex-1 bg-transparent text-[13px] text-gray-700 outline-none placeholder:text-gray-400">
                             </label>
 
-                            <button type="button" aria-label="Notifications" class="relative flex size-[34px] items-center justify-center rounded-md bg-gray-100 text-gray-600">
-                                <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" class="size-[18px]">
-                                    <path d="M15 7a5 5 0 0 0-10 0c0 5-2 5-2 7h14c0-2-2-2-2-7ZM8 17h4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" />
-                                </svg>
-                                <span class="absolute right-[7px] top-1.5 size-1.5 rounded-full bg-red-500"></span>
-                            </button>
+                            @auth
+                                <livewire:notification-bell />
+                            @endauth
 
-                            <span aria-label="{{ $userName }}" class="flex size-[34px] items-center justify-center rounded-full bg-navy-700 text-[11px] font-bold text-gray-200">
-                                {{ $userInitials }}
-                            </span>
-                            <form method="POST" action="{{ route('logout') }}">
-                                @csrf
-                                <button type="submit" class="text-xs font-medium text-gray-500 transition-colors hover:text-gray-800">Sign out</button>
-                            </form>
+                            @auth
+                                <div
+                                    class="relative"
+                                    x-data="{ profileMenuOpen: false }"
+                                    x-on:click.outside="profileMenuOpen = false"
+                                    x-on:keydown.escape.window="if (profileMenuOpen) { profileMenuOpen = false; $refs.profileMenuButton.focus() }"
+                                >
+                                    <button
+                                        x-ref="profileMenuButton"
+                                        type="button"
+                                        aria-label="Profile menu for {{ $userName }}"
+                                        aria-haspopup="true"
+                                        aria-controls="profile-menu"
+                                        aria-expanded="false"
+                                        x-bind:aria-expanded="profileMenuOpen ? 'true' : 'false'"
+                                        x-on:click="profileMenuOpen = ! profileMenuOpen"
+                                        @class([
+                                            'flex size-[34px] items-center justify-center rounded-full text-[11px] font-bold text-gray-200 ring-offset-2 transition hover:ring-2 hover:ring-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+                                            'bg-amber-700' => $isImpersonating,
+                                            'bg-navy-700' => ! $isImpersonating,
+                                        ])
+                                    >
+                                        {{ $userInitials }}
+                                    </button>
+
+                                    <div
+                                        id="profile-menu"
+                                        x-show="profileMenuOpen"
+                                        style="display: none"
+                                        class="absolute right-0 z-30 mt-2 w-[280px] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
+                                    >
+                                        <div class="border-b border-gray-100 px-4 py-3">
+                                            <p class="truncate text-[13px] font-bold text-gray-900">{{ $userName }}</p>
+                                            <p class="truncate text-xs text-gray-500">{{ $authenticatedUser->email }}</p>
+                                            <p class="mt-1.5"><span class="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">{{ $userRole }}</span></p>
+                                        </div>
+
+                                        @if ($isImpersonating)
+                                            <div role="status" class="border-b border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
+                                                <p class="text-xs font-semibold">Viewing as {{ $userName }}</p>
+                                                <form method="POST" action="{{ route('impersonation.destroy') }}" class="mt-1.5">
+                                                    @csrf
+                                                    <button type="submit" class="text-xs font-semibold text-amber-900 underline hover:text-amber-700">Return to my account</button>
+                                                </form>
+                                            </div>
+                                        @endif
+
+                                        <ul class="py-1.5 text-[13px] text-gray-700">
+                                            <li>
+                                                <a href="{{ route('profile.show') }}" class="flex items-center px-4 py-2 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">My Profile</a>
+                                            </li>
+                                            <li>
+                                                <a href="{{ route('notifications.index') }}" class="flex items-center justify-between px-4 py-2 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">
+                                                    <span>Notifications</span>
+                                                    @if ($unreadNotificationCount > 0)
+                                                        <span class="inline-flex min-w-5 justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                                                            {{ $unreadNotificationCount > 9 ? '9+' : $unreadNotificationCount }}
+                                                            <span class="sr-only">unread</span>
+                                                        </span>
+                                                    @endif
+                                                </a>
+                                            </li>
+                                            <li class="border-t border-gray-100 pt-1.5 mt-1.5">
+                                                <form method="POST" action="{{ route('logout') }}">
+                                                    @csrf
+                                                    <button type="submit" class="flex w-full items-center px-4 py-2 text-left hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">Sign out</button>
+                                                </form>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            @endauth
                         </div>
                     </div>
 

@@ -5,11 +5,13 @@ namespace App\Livewire;
 use App\Models\Module;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\UserPreferenceService;
 use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -20,6 +22,7 @@ class StaffDirectory extends Component
 
     public string $search = '';
 
+    #[Url(as: 'role', except: '')]
     public string $roleFilter = '';
 
     public string $statusFilter = '';
@@ -103,7 +106,7 @@ class StaffDirectory extends Component
                 });
             })
             ->orderBy('name')
-            ->paginate(6);
+            ->paginate(app(UserPreferenceService::class)->pageSize($user, 6));
 
         return view('livewire.staff-directory', [
             'users' => $users,

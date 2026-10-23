@@ -9,8 +9,12 @@ use App\Models\Product;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\WarehouseStock;
+use App\Services\NotificationService;
+use App\Services\SettingsService;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
+use Throwable;
 
 class StockService
 {
@@ -22,6 +26,11 @@ class StockService
         'return',
         'stock_in',
     ];
+
+    public function __construct(
+        private SettingsService $settings,
+        private NotificationService $notifications,
+    ) {}
 
     public function totalForProduct(Product $product): float
     {
@@ -39,7 +48,9 @@ class StockService
         $total = $totalUnits ?? $this->totalForProduct($product);
         $threshold = (float) $reorderThreshold;
 
-        if ($total < $threshold / 2) {
+        $criticalPercent = $this->settings->get('inventory.critical_percent', 50);
+
+        if ($total < $threshold * $criticalPercent / 100) {
             return 'critical';
         }
 
@@ -74,11 +85,16 @@ class StockService
             throw new InvalidArgumentException('Unsupported stock movement type.');
         }
 
-        return DB::transaction(function () use ($stock, $type, $change, $reference, $reason, $by): StockMovement {
+        $productTotalBefore = null;
+
+        $movement = DB::transaction(function () use ($stock, $type, $change, $reference, $reason, $by, &$productTotalBefore): StockMovement {
             $lockedStock = WarehouseStock::query()
                 ->whereKey($stock->getKey())
                 ->lockForUpdate()
                 ->firstOrFail();
+            $productTotalBefore = (float) WarehouseStock::query()
+                ->where('product_id', $lockedStock->product_id)
+                ->sum('current_level');
             $oldLevel = (float) $lockedStock->current_level;
             $newLevel = $oldLevel + $change;
 
@@ -124,6 +140,30 @@ class StockService
 
             return $movement;
         });
+
+        $this->notifyStockTransition($movement, (float) $productTotalBefore, $change, $by);
+
+        return $movement;
+    }
+
+    private function notifyStockTransition(StockMovement $movement, float $productTotalBefore, int $change, ?User $by): void
+    {
+        try {
+            $product = Product::query()->find($movement->product_id);
+
+            if ($product === null) {
+                return;
+            }
+
+            $this->notifications->stockStatusChanged(
+                $product,
+                $this->statusForProduct($product, $productTotalBefore),
+                $this->statusForProduct($product, $productTotalBefore + $change),
+                $by,
+            );
+        } catch (Throwable $exception) {
+            Log::error('Failed to evaluate stock notification.', ['exception' => $exception]);
+        }
     }
 
     // TODO: Wire production completion and sales creation to this service only after the workflow is approved.

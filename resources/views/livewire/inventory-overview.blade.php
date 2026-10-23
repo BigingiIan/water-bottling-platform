@@ -29,6 +29,9 @@
     </nav>
 
     @if ($activeTab === 'stock')
+    @if (! $forecastEnabled)
+        <p role="status" class="rounded-md border border-blue-100 bg-blue-50 px-4 py-2.5 text-sm text-blue-800">ML forecast suggestions are disabled in Settings.</p>
+    @endif
     <section aria-label="Product stock cover" class="grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-3.5">
         @forelse ($productCards as $card)
             @php
@@ -71,10 +74,14 @@
                 <div class="mt-3">
                     <div class="flex items-baseline justify-between gap-2 text-[11.5px] text-gray-500">
                         <span>Cover at forecast</span>
-                        @if ($card['coverDays'] === null)
+                        @if (! $forecastEnabled)
+                            <span class="font-semibold text-gray-500">Disabled in Settings</span>
+                        @elseif ($card['coverDays'] === null)
                             <span class="font-semibold text-gray-500">No forecast</span>
                         @else
-                            <span class="font-semibold tabular-nums text-gray-900">{{ number_format($card['coverDays'], 1) }} days</span>
+                            <span @class(['font-semibold tabular-nums', 'text-amber-700' => $card['coverWarning'], 'text-gray-900' => ! $card['coverWarning']])>
+                                {{ number_format($card['coverDays'], 1) }} days{{ $card['coverWarning'] ? ' — low cover' : '' }}
+                            </span>
                         @endif
                     </div>
                     <div class="mt-1.5 h-1.5 overflow-hidden rounded bg-gray-100" @if ($card['coverDays'] !== null) role="progressbar" aria-valuenow="{{ (int) round($coverPercent) }}" aria-valuemin="0" aria-valuemax="100" aria-label="Forecast cover for {{ $product->unit_type }}" @endif>
@@ -172,7 +179,7 @@
                                     <span aria-hidden="true" class="size-1.5 rounded-full {{ $dotClass }}"></span>{{ ucfirst($status) }}
                                 </span>
                             </td>
-                            <td class="border-b border-gray-100 px-[18px] py-3 text-xs text-gray-500">{{ $stockLine->last_updated?->format('M j, Y H:i') ?? '—' }}</td>
+                            <td class="border-b border-gray-100 px-[18px] py-3 text-xs text-gray-500">{{ app(\App\Support\SettingsDate::class)->formatDateTime($stockLine->last_updated) }}</td>
                             @if ($canWriteInventory)
                                 <td class="border-b border-gray-100 px-[18px] py-3 text-right">
                                     <button type="button" wire:click="openAdjustmentModal({{ $stockLine->id }})" class="rounded-md px-2.5 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100">Adjust</button>
@@ -191,7 +198,7 @@
         <section aria-labelledby="attention-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white">
             <div class="border-b border-gray-200 px-[18px] py-3.5">
                 <h2 id="attention-heading" class="text-sm font-bold text-gray-900">Needs attention</h2>
-                <p class="mt-0.5 text-xs text-gray-500">Products below their reorder threshold, critical items first.</p>
+                <p class="mt-0.5 text-xs text-gray-500">Products below reorder thresholds or forecast cover warnings, critical items first.</p>
             </div>
             @forelse ($attentionProducts as $card)
                 @php
@@ -204,10 +211,12 @@
                 <article wire:key="attention-{{ $product->id }}" class="flex items-start gap-3 border-b border-gray-100 px-[18px] py-3.5 last:border-b-0">
                     <span aria-hidden="true" class="mt-1.5 size-[7px] shrink-0 rounded-full {{ $critical ? 'bg-red-500' : 'bg-amber-500' }}"></span>
                     <div class="min-w-0 flex-1">
-                        <p class="text-[12.5px] text-gray-700"><strong class="text-gray-900">{{ $product->unit_type }}</strong> · {{ ucfirst($card['status']) }} at {{ number_format($card['totalUnits']) }} units</p>
+                        <p class="text-[12.5px] text-gray-700"><strong class="text-gray-900">{{ $product->unit_type }}</strong> · {{ $card['coverWarning'] && $card['status'] === 'ok' ? 'Low forecast cover' : ucfirst($card['status']) }} at {{ number_format($card['totalUnits']) }} units</p>
                         <p class="mt-0.5 text-[11px] text-gray-500">
-                            Cover: {{ $card['coverDays'] === null ? 'No forecast' : number_format($card['coverDays'], 1).' days' }}
-                            · Suggested run: {{ $suggestedUnits === null ? 'No forecast' : number_format($suggestedUnits).' units' }}
+                            Cover: {{ ! $forecastEnabled ? 'Disabled in Settings' : ($card['coverDays'] === null ? 'No forecast' : number_format($card['coverDays'], 1).' days') }}
+                            @if ($forecastEnabled)
+                                · Suggested run: {{ $suggestedUnits === null ? 'No forecast' : number_format($suggestedUnits).' units' }}
+                            @endif
                         </p>
                         <a href="{{ route('production.schedule', ['sku' => $product->unit_type]) }}" class="mt-1.5 inline-flex text-xs font-semibold text-blue-700 hover:text-blue-800">Plan a run <span aria-hidden="true" class="ml-1">→</span></a>
                     </div>
@@ -288,7 +297,7 @@
                                 };
                             @endphp
                             <tr wire:key="production-batch-{{ $batch->id }}" class="border-t border-gray-100 text-[13px] text-gray-700">
-                                <td class="px-[18px] py-3"><span class="font-mono text-xs font-semibold text-gray-900">B-{{ str_pad((string) $batch->id, 5, '0', STR_PAD_LEFT) }}</span><span class="mt-0.5 block text-xs text-gray-500">{{ $batch->batch_date?->format('M j, Y') }}</span></td>
+                                <td class="px-[18px] py-3"><span class="font-mono text-xs font-semibold text-gray-900">B-{{ str_pad((string) $batch->id, 5, '0', STR_PAD_LEFT) }}</span><span class="mt-0.5 block text-xs text-gray-500">{{ app(\App\Support\SettingsDate::class)->formatDate($batch->batch_date) }}</span></td>
                                 <td class="px-[18px] py-3 tabular-nums">{{ number_format((float) $batch->raw_water_volume, 2) }} L</td>
                                 <td class="px-[18px] py-3 tabular-nums">{{ number_format((float) $batch->bottled_volume, 2) }} L</td>
                                 <td class="px-[18px] py-3 tabular-nums">{{ number_format($yieldPercent, 1) }}%</td>
@@ -350,7 +359,7 @@
                                     : 0;
                             @endphp
                             <tr wire:key="leakage-report-{{ $report->id }}" class="border-t border-gray-100 text-[13px] text-gray-700">
-                                <td class="px-[18px] py-3"><span class="font-medium text-gray-900">{{ $report->report_date?->format('M j, Y') }}</span><span class="mt-0.5 block font-mono text-[11px] text-gray-500">B-{{ str_pad((string) $report->batch_id, 5, '0', STR_PAD_LEFT) }}</span></td>
+                                <td class="px-[18px] py-3"><span class="font-medium text-gray-900">{{ app(\App\Support\SettingsDate::class)->formatDate($report->report_date) }}</span><span class="mt-0.5 block font-mono text-[11px] text-gray-500">B-{{ str_pad((string) $report->batch_id, 5, '0', STR_PAD_LEFT) }}</span></td>
                                 <td class="px-[18px] py-3 tabular-nums">{{ number_format((float) $report->expected_volume, 2) }} L</td>
                                 <td class="px-[18px] py-3 tabular-nums">{{ number_format((float) $report->actual_volume, 2) }} L</td>
                                 <td class="px-[18px] py-3 font-mono tabular-nums {{ (float) $report->discrepancy < 0 ? 'text-red-700' : 'text-green-700' }}">{{ number_format((float) $report->discrepancy, 2) }} L</td>
@@ -419,7 +428,7 @@
                                 };
                             @endphp
                             <tr wire:key="stock-movement-{{ $movement->id }}" class="border-t border-gray-100 text-[13px] text-gray-700">
-                                <td class="px-[18px] py-3 whitespace-nowrap">{{ $movement->created_at?->format('M j, Y H:i') }}</td>
+                                <td class="px-[18px] py-3 whitespace-nowrap">{{ app(\App\Support\SettingsDate::class)->formatDateTime($movement->created_at) }}</td>
                                 <td class="px-[18px] py-3"><span class="rounded-full px-2.5 py-1 text-[11px] font-bold {{ $movementTypeClass }}">{{ str_replace('_', ' ', ucfirst($movement->type)) }}</span></td>
                                 <td class="px-[18px] py-3"><span class="rounded bg-teal-50 px-2 py-1 text-[11px] font-bold text-[#0f766e]">{{ $movement->product?->unit_type ?? '—' }}</span></td>
                                 <td class="px-[18px] py-3 font-mono font-semibold tabular-nums {{ $movement->quantity_change < 0 ? 'text-red-700' : 'text-green-700' }}">{{ $movement->quantity_change > 0 ? '+' : '' }}{{ number_format($movement->quantity_change) }}</td>
@@ -512,7 +521,7 @@
                         <select id="leakage-batch" wire:model="leakageBatchId" class="w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-[13px] text-gray-800">
                             <option value="">Select batch…</option>
                             @foreach ($batches as $batch)
-                                <option value="{{ $batch->id }}">B-{{ str_pad((string) $batch->id, 5, '0', STR_PAD_LEFT) }} · {{ $batch->batch_date?->format('M j, Y') }}</option>
+                                <option value="{{ $batch->id }}">B-{{ str_pad((string) $batch->id, 5, '0', STR_PAD_LEFT) }} · {{ app(\App\Support\SettingsDate::class)->formatDate($batch->batch_date) }}</option>
                             @endforeach
                         </select>
                         @error('leakageBatchId') <p role="alert" class="mt-1 text-[11px] text-red-600">{{ $message }}</p> @enderror
@@ -562,7 +571,7 @@
                         <select id="stock-in-batch" wire:model="stockInBatchId" class="w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-[13px] text-gray-800">
                             <option value="">Select production batch…</option>
                             @foreach ($batches as $batch)
-                                <option value="{{ $batch->id }}">B-{{ str_pad((string) $batch->id, 5, '0', STR_PAD_LEFT) }} · {{ $batch->batch_date?->format('M j, Y') }}</option>
+                                <option value="{{ $batch->id }}">B-{{ str_pad((string) $batch->id, 5, '0', STR_PAD_LEFT) }} · {{ app(\App\Support\SettingsDate::class)->formatDate($batch->batch_date) }}</option>
                             @endforeach
                         </select>
                         @error('stockInBatchId') <p role="alert" class="mt-1 text-[11px] text-red-600">{{ $message }}</p> @enderror

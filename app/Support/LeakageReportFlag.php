@@ -2,14 +2,11 @@
 
 namespace App\Support;
 
+use App\Services\SettingsService;
 use Illuminate\Database\Eloquent\Builder;
 
 class LeakageReportFlag
 {
-    private const REVIEW_PERCENT = 2;
-
-    private const INVESTIGATE_PERCENT = 5;
-
     public static function fromVolumes(float $expected, float $actual): string
     {
         if ($expected <= 0) {
@@ -17,12 +14,15 @@ class LeakageReportFlag
         }
 
         $percentage = abs($actual - $expected) / $expected * 100;
+        $settings = app(SettingsService::class);
+        $reviewPercent = $settings->get('leakage.review_percent', 2.0);
+        $investigatePercent = $settings->get('leakage.investigate_percent', 5.0);
 
-        if ($percentage < self::REVIEW_PERCENT) {
+        if ($percentage < $reviewPercent) {
             return 'Normal';
         }
 
-        if ($percentage <= self::INVESTIGATE_PERCENT) {
+        if ($percentage <= $investigatePercent) {
             return 'Review';
         }
 
@@ -36,19 +36,22 @@ class LeakageReportFlag
         }
 
         $percentage = '(ABS(discrepancy) * 100.0 / expected_volume)';
+        $settings = app(SettingsService::class);
+        $reviewPercent = $settings->get('leakage.review_percent', 2.0);
+        $investigatePercent = $settings->get('leakage.investigate_percent', 5.0);
 
         return match ($flag) {
-            'Normal' => $query->where(function (Builder $query) use ($percentage): void {
+            'Normal' => $query->where(function (Builder $query) use ($percentage, $reviewPercent): void {
                 $query->where('expected_volume', '<=', 0)
-                    ->orWhereRaw("{$percentage} < ?", [self::REVIEW_PERCENT]);
+                    ->orWhereRaw("{$percentage} < CAST(? AS DECIMAL)", [$reviewPercent]);
             }),
             'Review' => $query->where('expected_volume', '>', 0)
-                ->whereRaw("{$percentage} >= ?", [self::REVIEW_PERCENT])
-                ->whereRaw("{$percentage} <= ?", [self::INVESTIGATE_PERCENT]),
+                ->whereRaw("{$percentage} >= CAST(? AS DECIMAL)", [$reviewPercent])
+                ->whereRaw("{$percentage} <= CAST(? AS DECIMAL)", [$investigatePercent]),
             'Investigate' => $query->where('expected_volume', '>', 0)
-                ->whereRaw("{$percentage} > ?", [self::INVESTIGATE_PERCENT]),
+                ->whereRaw("{$percentage} > CAST(? AS DECIMAL)", [$investigatePercent]),
             'Attention' => $query->where('expected_volume', '>', 0)
-                ->whereRaw("{$percentage} >= ?", [self::REVIEW_PERCENT]),
+                ->whereRaw("{$percentage} >= CAST(? AS DECIMAL)", [$reviewPercent]),
         };
     }
 }

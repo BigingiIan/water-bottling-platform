@@ -11,6 +11,9 @@ use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\WarehouseStock;
 use App\Services\Inventory\StockService;
+use App\Services\NotificationService;
+use App\Services\SettingsService;
+use App\Services\UserPreferenceService;
 use App\Support\LeakageReportFlag;
 use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
@@ -163,13 +166,14 @@ class InventoryOverview extends Component
 
         $expected = (float) $validated['leakageExpectedVolume'];
         $actual = (float) $validated['leakageActualVolume'];
-        LeakageReport::create([
+        $report = LeakageReport::create([
             'batch_id' => $validated['leakageBatchId'],
             'report_date' => today()->toDateString(),
             'expected_volume' => $expected,
             'actual_volume' => $actual,
             'discrepancy' => $actual - $expected,
         ]);
+        app(NotificationService::class)->leakageReportFlagged($report, auth()->user());
 
         session()->flash('inventorySuccess', 'Leakage report recorded.');
         $this->closeLeakageReportModal();
@@ -321,9 +325,13 @@ class InventoryOverview extends Component
         $moduleAccess->authorize($user, 'inventory');
 
         $canWriteInventory = $moduleAccess->can($user, 'inventory', write: true);
+        $settings = app(SettingsService::class);
+        $forecastEnabled = $settings->get('forecast.enabled', true);
+        $criticalPercent = $settings->get('inventory.critical_percent', 50);
+        $coverWarningDays = $settings->get('inventory.cover_warning_days', 1.0);
         $productQuery = Product::query()->orderBy('name');
 
-        if ($this->activeTab === 'stock') {
+        if ($this->activeTab === 'stock' && $forecastEnabled) {
             $productQuery->with(['forecastRecords' => function (HasMany $query): void {
                 $query->whereDate('forecast_date', today()->addDay())
                     ->where('horizon_days', 1)
@@ -349,6 +357,7 @@ class InventoryOverview extends Component
             'products' => $products,
             'batches' => $batches,
             'leakageAttentionCount' => $leakageAttentionCount,
+            'forecastEnabled' => $forecastEnabled,
         ];
 
         if ($this->activeTab === 'batches') {
@@ -362,7 +371,7 @@ class InventoryOverview extends Component
                 ->orderByDesc('batch_date')
                 ->orderByDesc('id');
 
-            $viewData['batchRows'] = $batchQuery->paginate(15, pageName: 'batchesPage');
+            $viewData['batchRows'] = $batchQuery->paginate($this->pageSize(15), pageName: 'batchesPage');
 
             return view('livewire.inventory-overview', $viewData);
         }
@@ -376,7 +385,7 @@ class InventoryOverview extends Component
                 ->orderByDesc('report_date')
                 ->orderByDesc('id');
 
-            $viewData['leakageReports'] = $leakageQuery->paginate(15, pageName: 'leakagePage');
+            $viewData['leakageReports'] = $leakageQuery->paginate($this->pageSize(15), pageName: 'leakagePage');
 
             return view('livewire.inventory-overview', $viewData);
         }
@@ -406,7 +415,7 @@ class InventoryOverview extends Component
                 ->orderByDesc('created_at')
                 ->orderByDesc('id');
 
-            $viewData['movementRows'] = $movementQuery->paginate(25, pageName: 'movementsPage');
+            $viewData['movementRows'] = $movementQuery->paginate($this->pageSize(25), pageName: 'movementsPage');
 
             return view('livewire.inventory-overview', $viewData);
         }
@@ -418,13 +427,14 @@ class InventoryOverview extends Component
         $totals = (clone $totalsQuery)->pluck('total_units', 'product_id');
 
         $stockService = app(StockService::class);
-        $productCards = $products->map(function (Product $product) use ($stockService, $totals): array {
+        $productCards = $products->map(function (Product $product) use ($stockService, $totals, $forecastEnabled, $coverWarningDays): array {
             $totalUnits = (float) ($totals[$product->id] ?? 0);
-            $forecast = $product->forecastRecords->first();
+            $forecast = $forecastEnabled ? $product->forecastRecords->first() : null;
             $forecastDemand = $forecast === null ? null : (float) $forecast->predicted_demand;
             $coverDays = $forecastDemand !== null && $forecastDemand > 0
                 ? $totalUnits / $forecastDemand
                 : null;
+            $coverWarning = $coverDays !== null && $coverDays < $coverWarningDays;
 
             return [
                 'product' => $product,
@@ -432,6 +442,7 @@ class InventoryOverview extends Component
                 'status' => $stockService->statusForProduct($product, $totalUnits),
                 'coverDays' => $coverDays,
                 'forecastDemand' => $forecastDemand,
+                'coverWarning' => $coverWarning,
             ];
         });
 
@@ -443,8 +454,8 @@ class InventoryOverview extends Component
             ->when($this->locationFilter !== '', function (Builder $query): void {
                 $query->where('warehouse_location', $this->locationFilter);
             })
-            ->when(in_array($this->statusFilter, ['ok', 'low', 'critical'], true), function (Builder $query) use ($totalsQuery): void {
-                $query->whereHas('product', function (Builder $productQuery) use ($totalsQuery): void {
+            ->when(in_array($this->statusFilter, ['ok', 'low', 'critical'], true), function (Builder $query) use ($totalsQuery, $criticalPercent): void {
+                $query->whereHas('product', function (Builder $productQuery) use ($totalsQuery, $criticalPercent): void {
                     $productQuery->leftJoinSub(
                         clone $totalsQuery,
                         'inventory_totals',
@@ -456,8 +467,8 @@ class InventoryOverview extends Component
                     $total = 'COALESCE(inventory_totals.total_units, 0)';
 
                     match ($this->statusFilter) {
-                        'critical' => $productQuery->whereRaw("products.reorder_threshold > 0 AND {$total} < products.reorder_threshold / 2"),
-                        'low' => $productQuery->whereRaw("products.reorder_threshold > 0 AND {$total} < products.reorder_threshold AND {$total} >= products.reorder_threshold / 2"),
+                        'critical' => $productQuery->whereRaw("products.reorder_threshold > 0 AND {$total} < products.reorder_threshold * ? / 100", [$criticalPercent]),
+                        'low' => $productQuery->whereRaw("products.reorder_threshold > 0 AND {$total} < products.reorder_threshold AND {$total} >= products.reorder_threshold * ? / 100", [$criticalPercent]),
                         'ok' => $productQuery->where(function (Builder $query) use ($total): void {
                             $query->whereNull('products.reorder_threshold')
                                 ->orWhere('products.reorder_threshold', '<=', 0)
@@ -484,8 +495,12 @@ class InventoryOverview extends Component
             ->pluck('warehouse_location');
 
         $attentionProducts = $productCards
-            ->filter(fn (array $card): bool => in_array($card['status'], ['low', 'critical'], true))
-            ->sortBy(fn (array $card): int => $card['status'] === 'critical' ? 0 : 1)
+            ->filter(fn (array $card): bool => in_array($card['status'], ['low', 'critical'], true) || $card['coverWarning'])
+            ->sortBy(fn (array $card): int => match ($card['status']) {
+                'critical' => 0,
+                'low' => 1,
+                default => 2,
+            })
             ->values();
 
         return view('livewire.inventory-overview', array_merge($viewData, [
@@ -519,6 +534,13 @@ class InventoryOverview extends Component
         }
 
         return $parsed->format('Y-m-d') === $date ? $date : null;
+    }
+
+    private function pageSize(int $pageDefault): int
+    {
+        $user = auth()->user();
+
+        return app(UserPreferenceService::class)->pageSize($user instanceof User ? $user : null, $pageDefault);
     }
 
     private function authorizeInventoryWrite(): User

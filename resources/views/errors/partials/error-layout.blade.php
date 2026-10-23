@@ -1,20 +1,10 @@
-@php
-    if (! isset($reference)) {
-        $rawReference = strtoupper(bin2hex(random_bytes(4)));
-        $reference = substr($rawReference, 0, 4).'-'.substr($rawReference, 4);
-    }
-    $renderedAt = now();
-    $timestamp = $renderedAt->format('d M Y, H:i');
-@endphp
-
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
-    <title>Error {{ $status }} | {{ config('app.name', 'AquaOps') }}</title>
-    @fonts
+    <title>Error {{ $status }} | AquaOps</title>
     <style>
         :root {
             --navy-950: #0b1220;
@@ -232,8 +222,7 @@
 
             @if ($showMeta ?? false)
                 <footer class="error-meta">
-                    <span>REF: {{ $reference }}</span>
-                    <time datetime="{{ $renderedAt->toIso8601String() }}">{{ $timestamp }}</time>
+                    <span>REF: {{ $reference ?? 'UNAVAILABLE' }}</span>
                 </footer>
             @endif
         </section>

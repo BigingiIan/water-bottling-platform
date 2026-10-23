@@ -85,7 +85,7 @@
                             $historyVariance = $historyTarget > 0 ? round(($historyActual - $historyTarget) / $historyTarget * 100, 1) : null;
                         @endphp
                         <tr wire:key="history-{{ $schedule->id }}" class="transition-colors hover:bg-gray-50">
-                            <td class="border-b border-gray-100 px-[18px] py-3 font-mono text-xs text-gray-700">{{ $schedule->scheduled_date->toDateString() }}</td>
+                            <td class="border-b border-gray-100 px-[18px] py-3 font-mono text-xs text-gray-700">{{ app(\App\Support\SettingsDate::class)->formatDate($schedule->scheduled_date) }}</td>
                             <td class="border-b border-gray-100 px-[18px] py-3 font-mono text-xs text-gray-700">{{ $time }}</td>
                             <td class="border-b border-gray-100 px-[18px] py-3">
                                 <span class="rounded bg-teal-50 px-2.5 py-[3px] text-[11px] font-bold text-[#0f766e]">{{ $schedule->product_sku }}</span>

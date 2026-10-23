@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\UserPreferenceService;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,7 +22,7 @@ class AuthenticatedSessionController extends Controller
         return view('auth.login');
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, UserPreferenceService $preferences): RedirectResponse
     {
         $credentials = $request->validate([
             'email' => ['required', 'string', 'email'],
@@ -77,7 +78,7 @@ class AuthenticatedSessionController extends Controller
             return redirect()->route('password.set');
         }
 
-        return redirect()->route('dashboard');
+        return redirect()->to($preferences->landingUrl($user));
     }
 
     public function destroy(Request $request): RedirectResponse

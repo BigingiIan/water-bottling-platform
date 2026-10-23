@@ -74,10 +74,11 @@ class ErrorLogsTest extends TestCase
             'user_id' => $firstUser->id,
             'status_code' => 403,
             'module_slug' => 'inventory',
-            'url' => 'https://example.test/inventory',
+            'path' => '/inventory',
             'method' => 'GET',
             'exception_class' => 'Symfony\Component\HttpKernel\Exception\HttpException',
             'message' => 'Access denied.',
+            'exception_message' => 'Access denied.',
             'created_at' => '2026-10-03 12:00:00',
         ]);
         $secondEvent = $this->createEvent([
@@ -85,10 +86,11 @@ class ErrorLogsTest extends TestCase
             'user_id' => $secondUser->id,
             'status_code' => 500,
             'module_slug' => 'production',
-            'url' => 'https://example.test/production',
+            'path' => '/production',
             'method' => 'POST',
             'exception_class' => 'RuntimeException',
             'message' => 'An unexpected server error occurred.',
+            'exception_message' => 'Private failure details.',
             'created_at' => '2026-10-02 12:00:00',
         ]);
         $this->actingAs(User::factory()->create(['role_id' => $administrator->id]));
@@ -105,10 +107,14 @@ class ErrorLogsTest extends TestCase
             ->assertSee($firstEvent->reference)
             ->assertDontSee($secondEvent->reference)
             ->call('showDetails', $firstEvent->id)
-            ->assertSee('Error 403 · ABCD-1234')
+            ->assertSee('Error details · ABCD-1234')
+            ->assertSee('role="dialog"', false)
+            ->assertSee('aria-modal="true"', false)
+            ->assertSee('keydown.escape')
+            ->assertSee('Copy reference')
             ->assertSee('First Reporter')
             ->assertSee('Access denied.')
-            ->assertSee('GET https://example.test/inventory');
+            ->assertSee('GET /inventory');
     }
 
     public function test_viewer_can_clear_filter_selections(): void
@@ -141,6 +147,100 @@ class ErrorLogsTest extends TestCase
         $this->assertModelExists($recentEvent);
     }
 
+    public function test_view_access_only_sees_exception_class_and_reference_in_details(): void
+    {
+        $role = Role::query()->create([
+            'name' => 'Incident Reviewer',
+            'slug' => 'incident-reviewer',
+        ]);
+        $module = Module::query()->where('slug', 'error-logs')->firstOrFail();
+        DB::table('role_module_permissions')->insert([
+            'role_id' => $role->id,
+            'module_id' => $module->id,
+            'access_level' => 'view',
+        ]);
+        $event = $this->createEvent([
+            'reference' => 'VIEW-1234',
+            'exception_class' => RuntimeException::class,
+            'exception_message' => 'secret exception message',
+            'exception_file' => 'C:\\private\\application.php',
+            'exception_line' => 42,
+            'trace' => [['file' => 'C:\\private\\trace.php', 'line' => 10]],
+            'ip_address' => '192.0.2.20',
+            'resolution_note' => 'secret resolution note',
+        ]);
+        $this->actingAs(User::factory()->create(['role_id' => $role->id]));
+
+        Livewire::test(ErrorLogs::class)
+            ->call('showDetails', $event->id)
+            ->assertSet('resolutionNote', '')
+            ->assertSee('VIEW-1234')
+            ->assertSee(RuntimeException::class)
+            ->assertDontSee('secret exception message')
+            ->assertDontSee('private')
+            ->assertDontSee('192.0.2.20')
+            ->assertDontSee('secret resolution note')
+            ->assertDontSee('Exception message')
+            ->assertDontSee('Trace (top 15 frames)')
+            ->call('updateResolution', true)
+            ->assertForbidden();
+    }
+
+    public function test_full_access_can_resolve_event_with_optional_note(): void
+    {
+        $administrator = Role::query()->where('slug', 'administrator')->firstOrFail();
+        $event = $this->createEvent(['reference' => 'FULL-1234']);
+        $this->actingAs(User::factory()->create(['role_id' => $administrator->id]));
+
+        Livewire::test(ErrorLogs::class)
+            ->call('showDetails', $event->id)
+            ->set('resolutionNote', 'Fixed by restoring the missing route.')
+            ->call('updateResolution', true)
+            ->assertSee('Resolved');
+
+        $event->refresh();
+        $this->assertNotNull($event->resolved_at);
+        $this->assertSame('Fixed by restoring the missing route.', $event->resolution_note);
+    }
+
+    public function test_grouped_view_aggregates_fingerprint_events_and_toggles_to_raw_events(): void
+    {
+        $administrator = Role::query()->where('slug', 'administrator')->firstOrFail();
+        $this->createEvent([
+            'reference' => 'GRP1-0001',
+            'fingerprint' => str_repeat('a', 64),
+            'exception_class' => 'App\\Exceptions\\RepeatedFailure',
+            'created_at' => '2026-10-01 12:00:00',
+        ]);
+        $this->createEvent([
+            'reference' => 'GRP1-0002',
+            'fingerprint' => str_repeat('a', 64),
+            'exception_class' => 'App\\Exceptions\\RepeatedFailure',
+            'created_at' => '2026-10-03 12:00:00',
+        ]);
+        $this->createEvent([
+            'reference' => 'GRP2-0001',
+            'fingerprint' => str_repeat('b', 64),
+            'exception_class' => 'App\\Exceptions\\SingleFailure',
+            'created_at' => '2026-10-02 12:00:00',
+        ]);
+        $this->actingAs(User::factory()->create(['role_id' => $administrator->id]));
+
+        Livewire::test(ErrorLogs::class)
+            ->call('showGroups')
+            ->assertSee('App\\Exceptions\\RepeatedFailure')
+            ->assertSee('2')
+            ->assertSee('01 Oct 2026, 15:00')
+            ->assertSee('03 Oct 2026, 15:00')
+            ->assertSee('App\\Exceptions\\SingleFailure')
+            ->call('showGroupDetails', str_repeat('a', 64))
+            ->assertSee('GRP1-0002')
+            ->call('closeDetails')
+            ->call('showEvents')
+            ->assertSee('GRP1-0001')
+            ->assertSee('GRP1-0002');
+    }
+
     /**
      * @param  array<string, mixed>  $attributes
      */
@@ -151,10 +251,11 @@ class ErrorLogsTest extends TestCase
             'user_id' => null,
             'status_code' => 500,
             'module_slug' => null,
-            'url' => 'https://example.test/test',
+            'path' => '/test',
             'method' => 'GET',
             'exception_class' => null,
             'message' => 'Test error.',
+            'exception_message' => 'Test exception details.',
             'created_at' => now(),
             ...$attributes,
         ]);

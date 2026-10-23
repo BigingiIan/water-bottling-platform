@@ -6,6 +6,7 @@ use App\Mail\UserInvitation;
 use App\Models\AuditLog;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\SettingsService;
 use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\DB;
@@ -77,33 +78,35 @@ class InviteUserModal extends Component
         ]);
     }
 
-    public function saveInvite(): void
+    public function saveInvite(SettingsService $settings): void
     {
         $user = auth()->user();
 
         abort_unless($user instanceof User, 403);
         app(ModuleAccess::class)->authorize($user, 'users-roles', write: true);
+        $requiresPasswordChange = $settings->get('security.require_password_change_on_first_login', true);
+        $passwordMinimumLength = $settings->get('security.password_min_length', 8);
 
         $validated = $this->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')],
             'roleId' => ['required', 'integer', Rule::exists('roles', 'id')],
             'passwordMode' => ['required', Rule::in(['generate', 'custom'])],
-            'customPassword' => ['exclude_unless:passwordMode,custom', 'required', 'string', 'min:12', 'max:255', 'confirmed'],
+            'customPassword' => ['exclude_unless:passwordMode,custom', 'required', 'string', 'min:'.$passwordMinimumLength, 'max:255', 'confirmed'],
         ]);
 
         $temporaryPassword = $validated['passwordMode'] === 'custom'
             ? $validated['customPassword']
             : Str::random(16);
 
-        $invited = DB::transaction(function () use ($user, $validated, $temporaryPassword): User {
+        $invited = DB::transaction(function () use ($user, $validated, $temporaryPassword, $requiresPasswordChange): User {
             $invited = User::create([
                 'name' => $validated['name'],
                 'email' => $validated['email'],
                 'password_hash' => Hash::make($temporaryPassword),
                 'role_id' => $validated['roleId'],
-                'status' => 'pending',
-                'must_change_password' => true,
+                'status' => $requiresPasswordChange ? 'pending' : 'active',
+                'must_change_password' => $requiresPasswordChange,
             ]);
 
             AuditLog::create([

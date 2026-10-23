@@ -54,7 +54,6 @@ class RbacSeederTest extends TestCase
 
         $this->assertSame(
             [
-                'Audit Logs',
                 'Dashboard',
                 'Equipment',
                 'Error Logs',
@@ -62,6 +61,7 @@ class RbacSeederTest extends TestCase
                 'Inventory',
                 'Orders',
                 'Production',
+                'Settings',
                 'Users & Roles',
             ],
             Module::query()->orderBy('name')->pluck('name')->all(),
@@ -75,6 +75,10 @@ class RbacSeederTest extends TestCase
         $this->assertSame(
             'full',
             $administrator->modules()->where('slug', 'error-logs')->firstOrFail()->pivot->access_level,
+        );
+        $this->assertSame(
+            'full',
+            $administrator->modules()->where('slug', 'settings')->firstOrFail()->pivot->access_level,
         );
 
         $productionManager = Role::query()->where('slug', 'production-manager')->firstOrFail();
@@ -106,6 +110,11 @@ class RbacSeederTest extends TestCase
         $this->assertDatabaseHas('role_module_permissions', [
             'role_id' => $productionManager->id,
             'module_id' => Module::query()->where('slug', 'error-logs')->valueOrFail('id'),
+            'access_level' => 'none',
+        ]);
+        $this->assertDatabaseHas('role_module_permissions', [
+            'role_id' => $productionManager->id,
+            'module_id' => Module::query()->where('slug', 'settings')->valueOrFail('id'),
             'access_level' => 'none',
         ]);
         $this->assertSame(

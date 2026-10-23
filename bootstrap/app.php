@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\ApplyConfiguredSessionLifetime;
 use App\Http\Middleware\EnsureModuleAccess;
 use App\Http\Middleware\EnsurePasswordIsSet;
 use App\Http\Middleware\UpdateLastActiveAt;
@@ -20,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'module.access' => EnsureModuleAccess::class,
         ]);
+        $middleware->prependToGroup('web', ApplyConfiguredSessionLifetime::class);
         $middleware->appendToGroup('web', UpdateLastActiveAt::class);
         $middleware->appendToGroup('web', EnsurePasswordIsSet::class);
     })

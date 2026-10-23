@@ -1,4 +1,14 @@
-<section aria-labelledby="permission-matrix-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+<section
+    aria-labelledby="permission-matrix-heading"
+    class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+    x-data
+    x-on:role-deleted.window="$refs.toastMessage.textContent = $event.detail.message; $refs.toast.hidden = false; setTimeout(() => $refs.toast.hidden = true, 4000)"
+    x-on:role-delete-modal-closed.window="$nextTick(() => document.getElementById('delete-role-' + $event.detail.roleId)?.focus())"
+>
+    <div x-ref="toast" hidden role="status" class="fixed right-4 top-4 z-40 rounded-md border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-800 shadow-lg">
+        <span x-ref="toastMessage"></span>
+    </div>
+
     <div class="flex items-center justify-between gap-4 border-b border-gray-100 px-[18px] py-4">
         <div>
             <h1 id="permission-matrix-heading" class="text-[15px] font-bold text-gray-900">Module Access by Role</h1>
@@ -36,7 +46,7 @@
                                 <span @class(['inline-block rounded px-2.5 py-[3px] text-[11px] font-bold normal-case tracking-normal', $roleBadge['class']])>
                                     {{ $roleBadge['label'] }}
                                 </span>
-                                @if ($canManageRoles && $role->slug !== 'administrator')
+                                @if ($canManageRoles)
                                     <span class="flex items-center gap-2 normal-case tracking-normal">
                                         <button
                                             type="button"
@@ -47,11 +57,11 @@
                                         </button>
                                         <button
                                             type="button"
-                                            wire:click="deleteRole({{ $role->id }})"
-                                            wire:confirm="Delete this role? This action cannot be undone."
+                                            id="delete-role-{{ $role->id }}"
+                                            wire:click="openDeleteRoleModal({{ $role->id }})"
                                             class="font-medium text-red-700 hover:text-red-900"
                                         >
-                                            Delete
+                                            {{ $role->isSystemRole() ? 'System role' : 'Delete' }}
                                         </button>
                                     </span>
                                 @endif
@@ -197,6 +207,107 @@
                         </button>
                     </div>
                 </form>
+            </section>
+        </div>
+    @endif
+
+    @if ($showDeleteRoleModal && $deletingRole)
+        <div
+            class="fixed inset-0 z-30 flex items-center justify-center bg-gray-950/40 p-4"
+            role="presentation"
+            x-data="{
+                trapFocus(event) {
+                    const focusable = [...this.$refs.dialog.querySelectorAll('button:not([disabled]), a[href]')];
+                    const first = focusable[0];
+                    const last = focusable[focusable.length - 1];
+
+                    if (event.shiftKey && (document.activeElement === first || !this.$refs.dialog.contains(document.activeElement))) {
+                        event.preventDefault();
+                        last?.focus();
+                    } else if (!event.shiftKey && (document.activeElement === last || !this.$refs.dialog.contains(document.activeElement))) {
+                        event.preventDefault();
+                        first?.focus();
+                    }
+                }
+            }"
+            x-on:keydown.escape.window="$wire.closeDeleteRoleModal()"
+            x-on:keydown.tab="trapFocus($event)"
+            x-init="$nextTick(() => ($refs.cancelButton ?? $refs.closeButton).focus())"
+        >
+            <section
+                x-ref="dialog"
+                tabindex="-1"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="delete-role-heading"
+                class="w-full max-w-md rounded-lg bg-white p-5 shadow-xl"
+            >
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        @if ($deletingRole->isSystemRole())
+                            <h2 id="delete-role-heading" class="text-base font-bold text-gray-900">Protected system role</h2>
+                        @elseif ($deletingRole->users_count > 0)
+                            <h2 id="delete-role-heading" class="text-base font-bold text-gray-900">Role cannot be deleted</h2>
+                        @else
+                            <h2 id="delete-role-heading" class="text-base font-bold text-gray-900">Delete role '{{ $deletingRole->name }}'?</h2>
+                        @endif
+                    </div>
+                </div>
+
+                @if ($deletingRole->isSystemRole())
+                    <p class="mt-4 text-sm text-gray-700">'{{ $deletingRole->name }}' is a system role and cannot be deleted.</p>
+                @elseif ($deletingRole->users_count > 0)
+                    <p class="mt-4 text-sm text-gray-700">{{ $deletingRole->users_count }} users still have the role '{{ $deletingRole->name }}'. Reassign them before deleting it.</p>
+                    <ul class="mt-3 list-inside list-disc text-sm text-gray-600">
+                        @foreach ($deletingRoleUsers as $userName)
+                            <li>{{ $userName }}</li>
+                        @endforeach
+                        @if ($deletingRole->users_count > $deletingRoleUsers->count())
+                            <li>and {{ $deletingRole->users_count - $deletingRoleUsers->count() }} more</li>
+                        @endif
+                    </ul>
+                    <a href="{{ $deletingRoleUsersUrl }}" class="mt-3 inline-block text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline">View users</a>
+                @else
+                    <div class="mt-4 flex flex-col gap-2 text-sm text-gray-700">
+                        <p>Users with this role: {{ $deletingRole->users_count }}</p>
+                        <p>Modules with access above 'none': {{ $deletingRole->accessible_modules_count }}</p>
+                        <p>This cannot be undone.</p>
+                    </div>
+                @endif
+
+                @if ($deleteRoleError)
+                    <p role="alert" class="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{{ $deleteRoleError }}</p>
+                @endif
+
+                <div class="mt-5 flex justify-end gap-2">
+                    @if (! $deletingRole->isSystemRole() && $deletingRole->users_count === 0)
+                        <button
+                            x-ref="cancelButton"
+                            type="button"
+                            wire:click="closeDeleteRoleModal"
+                            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            wire:click="deleteRole"
+                            wire:loading.attr="disabled"
+                            class="rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                        >
+                            Delete role
+                        </button>
+                    @else
+                        <button
+                            x-ref="closeButton"
+                            type="button"
+                            wire:click="closeDeleteRoleModal"
+                            class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        >
+                            Close
+                        </button>
+                    @endif
+                </div>
             </section>
         </div>
     @endif

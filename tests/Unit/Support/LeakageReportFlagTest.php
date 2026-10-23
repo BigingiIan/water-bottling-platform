@@ -3,11 +3,14 @@
 namespace Tests\Unit\Support;
 
 use App\Support\LeakageReportFlag;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class LeakageReportFlagTest extends TestCase
 {
+    use RefreshDatabase;
+
     #[DataProvider('flagCases')]
     public function test_flag_matches_the_discrepancy_thresholds(float $actual, string $expectedFlag): void
     {

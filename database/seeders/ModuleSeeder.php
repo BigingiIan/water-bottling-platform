@@ -20,7 +20,7 @@ class ModuleSeeder extends Seeder
             ['name' => 'Equipment', 'slug' => 'equipment', 'description' => 'Maintenance tasks'],
             ['name' => 'Forecasting', 'slug' => 'forecasting', 'description' => 'Demand prediction'],
             ['name' => 'Users & Roles', 'slug' => 'users-roles', 'description' => 'RBAC administration'],
-            ['name' => 'Audit Logs', 'slug' => 'audit-logs', 'description' => 'System activity trail'],
+            ['name' => 'Settings', 'slug' => 'settings', 'description' => 'Application settings and audit trail'],
             ['name' => 'Error Logs', 'slug' => 'error-logs', 'description' => 'Branded application errors'],
         ];
 

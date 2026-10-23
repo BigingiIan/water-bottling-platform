@@ -14,10 +14,19 @@ class ErrorEvent extends Model
         'user_id',
         'status_code',
         'module_slug',
-        'url',
+        'path',
         'method',
         'exception_class',
         'message',
+        'exception_message',
+        'exception_file',
+        'exception_line',
+        'trace',
+        'fingerprint',
+        'role_slug',
+        'ip_address',
+        'resolved_at',
+        'resolution_note',
         'created_at',
     ];
 
@@ -25,7 +34,10 @@ class ErrorEvent extends Model
     {
         return [
             'created_at' => 'datetime',
+            'resolved_at' => 'datetime',
             'status_code' => 'integer',
+            'exception_line' => 'integer',
+            'trace' => 'array',
         ];
     }
 

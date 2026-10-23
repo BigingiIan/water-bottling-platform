@@ -9,6 +9,14 @@ use Illuminate\Validation\ValidationException;
 
 class Role extends Model
 {
+    private const SYSTEM_ROLE_SLUGS = [
+        'administrator',
+        'production-manager',
+        'production-staff',
+        'inventory-staff',
+        'maintenance-staff',
+    ];
+
     protected $fillable = [
         'name',
         'slug',
@@ -29,9 +37,9 @@ class Role extends Model
         });
 
         static::deleting(function (Role $role): void {
-            if ($role->slug === 'administrator') {
+            if ($role->isSystemRole()) {
                 throw ValidationException::withMessages([
-                    'roleAction' => 'The Administrator role cannot be deleted.',
+                    'roleAction' => "'{$role->name}' is a system role and cannot be deleted.",
                 ]);
             }
         });
@@ -46,5 +54,10 @@ class Role extends Model
     {
         return $this->belongsToMany(Module::class, 'role_module_permissions')
             ->withPivot('access_level');
+    }
+
+    public function isSystemRole(): bool
+    {
+        return in_array($this->slug, self::SYSTEM_ROLE_SLUGS, true);
     }
 }
