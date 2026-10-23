@@ -1,3 +1,21 @@
+"""Refit the chosen forecasting configuration on all data and export serving bundles.
+
+Run from the ml directory, after the rolling-origin evaluation has written
+outputs/rolling_origin (baseline, tuned, stacking, final_test, stacking_final_test):
+
+    uv run python -m training.train_pipeline
+
+The configuration and its reported accuracy come from that evaluation. Prophet
+alone (stacker weights [1, 0, 0]) was chosen on development folds inside
+meta_train, and rmse_score is Prophet's h=1 RMSE on the single final_test pass,
+made with models fitted before that window. The refitted models here have seen
+every row, so they have no held-out score of their own; the final_test estimate
+is the honest one.
+
+XGBoost and the LSTM are still fitted and saved with zero weight, so the
+comparison can be re-run on real data later. The serving code skips them.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -15,26 +33,22 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
-import tensorflow as tf
-import xgboost as xgb
-from prophet import Prophet
-from sklearn.linear_model import LinearRegression
-from sklearn.preprocessing import MinMaxScaler
-from tensorflow.keras.callbacks import EarlyStopping
-from tensorflow.keras.layers import Dense, Dropout, Input, LSTM
-from tensorflow.keras.models import Sequential
+
+from training.forecasting import (
+    CONTEXT_COLUMNS,
+    DEFAULT_LSTM_CONFIG,
+    DEFAULT_PROPHET_CONFIG,
+    XGBOOST_FEATURE_COLUMNS,
+    LinearStacker,
+    TemperatureClimatology,
+    fit_lstm,
+    fit_prophet,
+    fit_xgboost,
+    prepare_context,
+)
 
 LOGGER = logging.getLogger("ml.training")
 SEED = 21
-LSTM_LOOKBACK = 14
-CONTEXT_COLUMNS = (
-    "is_promotion",
-    "is_public_holiday",
-    "is_school_term",
-    "temperature_c",
-)
-LSTM_FEATURE_COLUMNS = ("units_sold", *CONTEXT_COLUMNS)
-STACK_FEATURE_COLUMNS = ("prophet_pred", "xgboost_pred", "lstm_pred")
 REQUIRED_DATA_COLUMNS = {
     "date",
     "product_sku",
@@ -51,53 +65,60 @@ ARTIFACT_FILENAMES = (
     "metadata.json",
     "manifest.json",
 )
-XGBOOST_FEATURE_CANDIDATES = (
-    *CONTEXT_COLUMNS,
-    "lag_1",
-    "lag_7",
-    "lag_14",
-    "rolling_mean_7",
-    "rolling_std_7",
-    "rolling_mean_14",
-    "rolling_std_14",
-    "day_of_week",
-)
+ENSEMBLE_MODE = "prophet_only"
+STACKER_WEIGHTS = {"prophet": 1.0, "xgboost": 0.0, "lstm": 0.0}
+REPORTED_MODEL = "Prophet"
+REPORTED_HORIZON = "h1"
+TUNING_ORIGINS = 28
+TUNING_HORIZON = 28
+EVALUATION_PROTOCOL = {
+    "scheme": "rolling origin, expanding window",
+    "headline_horizon_days": 1,
+    "max_horizon_days": 28,
+    "fold_step_days": 28,
+    "origins_per_fold": 28,
+    "temperature": "monthly mean of the training rows",
+    "selection": "stacker variant and hyperparameters chosen on development folds inside meta_train",
+    "reported_estimate": "Prophet h=1 RMSE on the single final_test pass, pre-refit models",
+    "data": "synthetic (generator seed 42); not a real-world accuracy estimate",
+}
 
 
 @dataclass
 class FittedSku:
     prophet: Any
-    xgboost: xgb.XGBRegressor
-    lstm: Sequential
-    lstm_scaler: MinMaxScaler
-    meta_stacker: LinearRegression
-    prophet_regressors: list[str]
-    xgboost_feature_cols: list[str]
-    final_metrics: dict[str, dict[str, float]]
+    xgboost: Any
+    lstm: Any
+    lstm_scaler: Any
+    meta_stacker: LinearStacker
     metadata: dict[str, Any]
+    xgboost_trials: list[dict[str, Any]]
 
 
 def parse_args() -> argparse.Namespace:
-    default_root = Path(__file__).resolve().parents[1]
-    parser = argparse.ArgumentParser(
-        description="Train per-SKU demand models and export FastAPI-ready bundles."
-    )
+    ml_root = Path(__file__).resolve().parents[1]
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--data",
         type=Path,
-        default=default_root / "data" / "kenya_water_demand_daily.csv",
+        default=ml_root.parent / "data" / "kenya_water_demand_daily.csv",
         help="CSV with date, product_sku, units_sold and the four context features.",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        default=default_root / "saved_models",
-        help="Directory receiving one model artifact directory per SKU.",
+        default=ml_root / "saved_models",
+        help="Directory receiving one model artifact directory per SKU and the metrics files.",
     )
-    parser.add_argument("--lookback", type=int, default=LSTM_LOOKBACK)
-    parser.add_argument("--epochs", type=int, default=15)
-    parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--verbose", type=int, choices=(0, 1, 2), default=2)
+    parser.add_argument(
+        "--evaluation",
+        type=Path,
+        default=ml_root / "outputs" / "rolling_origin",
+        help="Directory holding the rolling-origin evaluation runs.",
+    )
+    parser.add_argument("--xgboost-trials", type=int, default=12)
+    parser.add_argument("--epochs", type=int, default=DEFAULT_LSTM_CONFIG["epochs"])
+    parser.add_argument("--verbose", type=int, choices=(0, 1, 2), default=0)
     parser.add_argument("--seed", type=int, default=SEED)
     return parser.parse_args()
 
@@ -179,264 +200,100 @@ def chronological_split(
     return base_train, meta_train, final_test
 
 
-def engineer_xgboost_features(frame: pd.DataFrame) -> pd.DataFrame:
-    result = frame.copy()
-    for lag in (1, 7, 14):
-        result[f"lag_{lag}"] = result["units_sold"].shift(lag)
+def final_test_estimates(evaluation_dir: Path) -> tuple[pd.DataFrame, dict[str, str]]:
+    """Prophet's final_test h=1 metrics per SKU, and the final_test window."""
+    summary_path = evaluation_dir / "final_test" / "summary.csv"
+    if not summary_path.is_file():
+        raise FileNotFoundError(f"Run the final_test evaluation first; missing {summary_path}.")
 
-    shifted_sales = result["units_sold"].shift(1)
-    for window in (7, 14):
-        result[f"rolling_mean_{window}"] = shifted_sales.rolling(window=window).mean()
-        result[f"rolling_std_{window}"] = shifted_sales.rolling(window=window).std()
-
-    result["day_of_week"] = result["date"].dt.dayofweek.astype(float)
-    return result
-
-
-def _xgboost_prediction_rows(
-    history: pd.DataFrame,
-    current: pd.DataFrame,
-) -> pd.DataFrame:
-    combined = pd.concat([history, current], ignore_index=True)
-    combined = combined.sort_values("date").reset_index(drop=True)
-    start_date = current["date"].min()
-    result = engineer_xgboost_features(combined)
-    return result.loc[result["date"].isin(current["date"]) & (result["date"] >= start_date)].copy()
-
-
-def predict_xgboost(
-    model: xgb.XGBRegressor,
-    feature_columns: list[str],
-    history: pd.DataFrame,
-    current: pd.DataFrame,
-) -> np.ndarray:
-    engineered = _xgboost_prediction_rows(history, current)
-    features = engineered[feature_columns]
-    if features.isna().any().any():
-        raise ValueError("XGBoost inference features contain missing lag values.")
-
-    return np.clip(model.predict(features), 0, None)
-
-
-def fit_lstm(
-    base_train: pd.DataFrame,
-    lookback: int,
-    epochs: int,
-    batch_size: int,
-    verbose: int,
-    seed: int,
-) -> tuple[Sequential, MinMaxScaler]:
-    np.random.seed(seed)
-    tf.random.set_seed(seed)
-
-    scaler = MinMaxScaler()
-    scaled = scaler.fit_transform(base_train[list(LSTM_FEATURE_COLUMNS)].astype(np.float32))
-    X_train, y_train = _make_lstm_sequences(scaled, lookback)
-    if len(X_train) < 2:
-        raise ValueError(f"Not enough LSTM training sequences for lookback={lookback}.")
-
-    model = Sequential(
-        [
-            Input(shape=(lookback, len(LSTM_FEATURE_COLUMNS))),
-            LSTM(64, activation="tanh", return_sequences=True),
-            Dropout(0.2),
-            LSTM(32, activation="tanh"),
-            Dropout(0.2),
-            Dense(1),
-        ]
-    )
-    model.compile(optimizer="adam", loss="mse")
-
-    use_validation = len(X_train) >= 20
-    callbacks = (
-        [EarlyStopping(monitor="val_loss", patience=5, restore_best_weights=True)]
-        if use_validation
-        else []
-    )
-    model.fit(
-        X_train,
-        y_train,
-        epochs=epochs,
-        batch_size=batch_size,
-        validation_split=0.10 if use_validation else 0.0,
-        callbacks=callbacks,
-        shuffle=False,
-        verbose=verbose,
-    )
-
-    return model, scaler
-
-
-def _make_lstm_sequences(
-    scaled_data: np.ndarray,
-    lookback: int,
-) -> tuple[np.ndarray, np.ndarray]:
-    X, y = [], []
-    for index in range(len(scaled_data) - lookback):
-        X.append(scaled_data[index : index + lookback, :])
-        y.append(scaled_data[index + lookback, 0])
-
-    return np.asarray(X, dtype=np.float32), np.asarray(y, dtype=np.float32)
-
-
-def predict_lstm(
-    model: Sequential,
-    scaler: MinMaxScaler,
-    history: pd.DataFrame,
-    current: pd.DataFrame,
-    lookback: int,
-) -> np.ndarray:
-    inference_data = pd.concat(
-        [history.tail(lookback), current],
-        ignore_index=True,
-    )
-    scaled = scaler.transform(inference_data[list(LSTM_FEATURE_COLUMNS)].astype(np.float32))
-    sequences, _ = _make_lstm_sequences(scaled, lookback)
-    if len(sequences) != len(current):
-        raise ValueError(
-            f"LSTM generated {len(sequences)} predictions for {len(current)} rows."
-        )
-
-    scaled_predictions = model.predict(sequences, verbose=0).reshape(-1)
-    inverse_data = np.zeros((len(scaled_predictions), len(LSTM_FEATURE_COLUMNS)), dtype=np.float32)
-    inverse_data[:, 0] = scaled_predictions
-    return np.clip(scaler.inverse_transform(inverse_data)[:, 0], 0, None)
-
-
-def model_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict[str, float]:
-    actual = np.asarray(y_true, dtype=float)
-    predicted = np.asarray(y_pred, dtype=float)
-    if len(actual) != len(predicted) or len(actual) == 0:
-        raise ValueError("Metric inputs must be non-empty and have matching lengths.")
-
-    denominator = (np.abs(actual) + np.abs(predicted)) / 2.0
-    return {
-        "RMSE": float(np.sqrt(np.mean((actual - predicted) ** 2))),
-        "MAPE": float(np.mean(np.abs(actual - predicted) / np.clip(actual, 1e-8, None)) * 100),
-        "sMAPE": float(
-            np.mean(np.abs(predicted - actual) / np.clip(denominator, 1e-8, None)) * 100
-        ),
-    }
+    summary = pd.read_csv(summary_path)
+    rows = summary[
+        (summary["temperature_mode"] == "climatology")
+        & (summary["model"] == REPORTED_MODEL)
+        & (summary["horizon"] == REPORTED_HORIZON)
+        & (summary["sku"] != "Mean of SKUs")
+    ].set_index("sku")
+    targets = pd.read_csv(evaluation_dir / "final_test" / "predictions.csv.gz", usecols=["target_date"])
+    window = {"start": str(targets["target_date"].min()), "end": str(targets["target_date"].max())}
+    return rows, window
 
 
 def fit_sku(
     sku_data: pd.DataFrame,
-    lookback: int,
+    estimate: pd.Series,
+    final_test_window: dict[str, str],
+    xgboost_trials: int,
     epochs: int,
-    batch_size: int,
     verbose: int,
     seed: int,
     model_version: str,
+    library_versions: dict[str, str],
 ) -> FittedSku:
+    """Fit all three models on every row with the configuration chosen by the evaluation."""
+    from training.tuning import select_config
+
     sku = str(sku_data["product_sku"].iloc[0])
-    base_train, meta_train, final_test = chronological_split(sku_data, lookback)
+    climatology = TemperatureClimatology.fit(sku_data)
+    prepared = prepare_context(sku_data, "climatology", climatology)
 
-    prophet_regressors = [
-        column for column in CONTEXT_COLUMNS if base_train[column].nunique(dropna=False) > 1
-    ]
-    prophet_model = Prophet(
-        yearly_seasonality=len(base_train) >= 730,
-        weekly_seasonality=True,
-        daily_seasonality=False,
+    prophet_model, prophet_regressors = fit_prophet(prepared, **DEFAULT_PROPHET_CONFIG)
+    xgboost_config, trials = select_config(
+        "xgboost", sku_data, "climatology", xgboost_trials, TUNING_ORIGINS, TUNING_HORIZON
     )
-    for column in prophet_regressors:
-        prophet_model.add_regressor(column)
+    xgboost_model = fit_xgboost(prepared, seed, params=xgboost_config)
+    lstm_config = {**DEFAULT_LSTM_CONFIG, "epochs": epochs}
+    lstm_model, lstm_scaler = fit_lstm(prepared, seed, verbose=verbose, **lstm_config)
+    stacker = LinearStacker([STACKER_WEIGHTS[model] for model in ("prophet", "xgboost", "lstm")])
 
-    prophet_fit = base_train.rename(columns={"date": "ds", "units_sold": "y"})
-    prophet_model.fit(prophet_fit[["ds", "y", *prophet_regressors]])
+    rmse_score = round(float(estimate["RMSE_mean"]), 4)
+    if not np.isfinite(rmse_score) or not 0 <= rmse_score <= 9999.9999:
+        raise ValueError(f"SKU {sku} final_test RMSE {rmse_score} is outside the manifest limits.")
 
-    def prophet_predict(frame: pd.DataFrame) -> np.ndarray:
-        future = frame.rename(columns={"date": "ds"})
-        return np.clip(
-            prophet_model.predict(future[["ds", *prophet_regressors]])["yhat"].to_numpy(),
-            0,
-            None,
-        )
-
-    xgb_feature_columns = list(XGBOOST_FEATURE_CANDIDATES)
-    base_features = engineer_xgboost_features(base_train)
-    clean_base = base_features.dropna(subset=[*xgb_feature_columns, "units_sold"])
-    if clean_base.empty:
-        raise ValueError(f"SKU {sku} has no valid XGBoost training rows after lag creation.")
-
-    xgb_model = xgb.XGBRegressor(
-        n_estimators=100,
-        max_depth=6,
-        learning_rate=0.1,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        random_state=seed,
-        n_jobs=-1,
-        verbosity=0,
-    )
-    xgb_model.fit(clean_base[xgb_feature_columns], clean_base["units_sold"])
-
-    lstm_model, lstm_scaler = fit_lstm(
-        base_train,
-        lookback,
-        epochs,
-        batch_size,
-        verbose,
-        seed,
-    )
-
-    prophet_meta = prophet_predict(meta_train)
-    xgb_meta = predict_xgboost(xgb_model, xgb_feature_columns, base_train, meta_train)
-    lstm_meta = predict_lstm(lstm_model, lstm_scaler, base_train, meta_train, lookback)
-
-    stack_train = pd.DataFrame(
-        {
-            "prophet_pred": prophet_meta,
-            "xgboost_pred": xgb_meta,
-            "lstm_pred": lstm_meta,
+    metadata = {
+        "model_version": model_version,
+        "rmse_score": rmse_score,
+        "rmse_score_source": (
+            f"{REPORTED_MODEL} h=1 RMSE on final_test, mean over {int(estimate['folds'])} "
+            "rolling-origin folds, models fitted before final_test"
+        ),
+        "final_test_estimate": {
+            "model": REPORTED_MODEL,
+            "horizon_days": 1,
+            "folds": int(estimate["folds"]),
+            "window_start": final_test_window["start"],
+            "window_end": final_test_window["end"],
+            **{
+                f"{metric}_{stat}": round(float(estimate[f"{metric}_{stat}"]), 4)
+                for metric in ("RMSE", "MAPE", "sMAPE")
+                for stat in ("mean", "fold_sd")
+            },
         },
-        columns=STACK_FEATURE_COLUMNS,
-    )
-    meta_stacker = LinearRegression()
-    meta_stacker.fit(stack_train, meta_train["units_sold"].to_numpy())
-
-    prophet_final = prophet_predict(final_test)
-    xgb_final = predict_xgboost(xgb_model, xgb_feature_columns, meta_train, final_test)
-    lstm_final = predict_lstm(lstm_model, lstm_scaler, meta_train, final_test, lookback)
-    stack_final = pd.DataFrame(
-        {
-            "prophet_pred": prophet_final,
-            "xgboost_pred": xgb_final,
-            "lstm_pred": lstm_final,
-        },
-        columns=STACK_FEATURE_COLUMNS,
-    )
-    stacked_predictions = np.clip(meta_stacker.predict(stack_final), 0, None)
-    actuals = final_test["units_sold"].to_numpy()
-
-    final_metrics = {
-        "Prophet": model_metrics(actuals, prophet_final),
-        "XGBoost": model_metrics(actuals, xgb_final),
-        "LSTM": model_metrics(actuals, lstm_final),
-        "Stacked": model_metrics(actuals, stacked_predictions),
+        "ensemble_mode": ENSEMBLE_MODE,
+        "stacker_weights": dict(STACKER_WEIGHTS),
+        "stacker_intercept": 0.0,
+        "evaluation_protocol": {**EVALUATION_PROTOCOL, "folds": int(estimate["folds"])},
+        "temperature_source": "monthly_mean",
+        "temperature_climatology": climatology.to_dict(),
+        "prophet_regressors": prophet_regressors,
+        "prophet_config": dict(DEFAULT_PROPHET_CONFIG),
+        "xgboost_feature_cols": list(XGBOOST_FEATURE_COLUMNS),
+        "xgboost_config": xgboost_config,
+        "lstm_config": lstm_config,
+        "lstm_lookback": lstm_config["lookback"],
+        "training_rows": len(sku_data),
+        "training_start": sku_data["date"].min().date().isoformat(),
+        "training_end": sku_data["date"].max().date().isoformat(),
+        "seed": seed,
+        "library_versions": library_versions,
     }
-    rmse_score = final_metrics["Stacked"]["RMSE"]
-    if not np.isfinite(rmse_score) or rmse_score > 9999.9999:
-        raise ValueError(
-            f"SKU {sku} stacked RMSE {rmse_score} is outside the FastAPI manifest limits."
-        )
-
     return FittedSku(
         prophet=prophet_model,
-        xgboost=xgb_model,
+        xgboost=xgboost_model,
         lstm=lstm_model,
         lstm_scaler=lstm_scaler,
-        meta_stacker=meta_stacker,
-        prophet_regressors=prophet_regressors,
-        xgboost_feature_cols=xgb_feature_columns,
-        final_metrics=final_metrics,
-        metadata={
-            "model_version": model_version,
-            "rmse_score": rmse_score,
-            "prophet_regressors": prophet_regressors,
-            "xgboost_feature_cols": xgb_feature_columns,
-            "lstm_lookback": lookback,
-        },
+        meta_stacker=stacker,
+        metadata=metadata,
+        xgboost_trials=[{"sku": sku, **row} for row in trials],
     )
 
 
@@ -446,7 +303,6 @@ def save_sku_bundle(output_dir: Path, sku: str, fitted: FittedSku) -> Path:
 
     output_dir.mkdir(parents=True, exist_ok=True)
     target_dir = output_dir / sku
-    target_dir.parent.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix=f".{sku}-", dir=output_dir) as temp_path:
         staging_dir = Path(temp_path) / sku
@@ -471,6 +327,8 @@ def save_sku_bundle(output_dir: Path, sku: str, fitted: FittedSku) -> Path:
 
 
 def verify_artifact_bundle(directory: Path) -> dict[str, Any]:
+    from serving.inference import validate_manifest
+
     missing = [
         filename for filename in ARTIFACT_FILENAMES if not (directory / filename).is_file()
     ]
@@ -478,17 +336,10 @@ def verify_artifact_bundle(directory: Path) -> dict[str, Any]:
         raise RuntimeError(f"Incomplete artifact bundle in {directory}: {missing}")
 
     manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
-    if not isinstance(manifest.get("model_version"), str) or not manifest["model_version"].strip():
-        raise RuntimeError(f"Model bundle has an invalid model_version: {directory}")
-
-    rmse_score = manifest.get("rmse_score")
-    if (
-        isinstance(rmse_score, bool)
-        or not isinstance(rmse_score, (int, float))
-        or not np.isfinite(rmse_score)
-        or not 0 <= rmse_score <= 9999.9999
-    ):
-        raise RuntimeError(f"Model bundle has an invalid rmse_score: {directory}")
+    try:
+        validate_manifest(manifest)
+    except ValueError as exception:
+        raise RuntimeError(f"Model bundle has invalid metadata: {directory}") from exception
 
     metadata = json.loads((directory / "metadata.json").read_text(encoding="utf-8"))
     if metadata != manifest:
@@ -497,75 +348,92 @@ def verify_artifact_bundle(directory: Path) -> dict[str, Any]:
     return manifest
 
 
-def comparison_table(results: dict[str, FittedSku]) -> pd.DataFrame:
-    rows = {}
-    for sku, fitted in results.items():
-        rows[sku] = {
-            (model_name, metric_name): metric_value
-            for model_name, metrics in fitted.final_metrics.items()
-            for metric_name, metric_value in metrics.items()
-        }
+def check_skip_equivalence(output_dir: Path, sku: str, sku_data: pd.DataFrame) -> float:
+    """Score the last day both ways; the Prophet-only path must match all three models exactly."""
+    from serving.inference import load_bundle, predict_sku
 
-    table = pd.DataFrame.from_dict(rows, orient="index")
-    table.index.name = "SKU"
-    table.columns = pd.MultiIndex.from_tuples(table.columns, names=["Model", "Metric"])
-    return table.sort_index()
+    context = sku_data.tail(15).copy()
+    context.loc[context.index[-1], "units_sold"] = np.nan
+    lean = predict_sku(sku, 1, context, bundle=load_bundle(output_dir / sku))
+    full = predict_sku(
+        sku, 1, context, bundle=load_bundle(output_dir / sku, skip_unused_models=False)
+    )
+    if not np.array_equal(lean["predicted_units_sold"], full["predicted_units_sold"]):
+        raise RuntimeError(f"SKU {sku}: skipping zero-weight models changed the prediction.")
+
+    return float(lean["predicted_units_sold"].iloc[0])
 
 
 def run_training(
     data_path: Path,
     output_dir: Path,
-    lookback: int = LSTM_LOOKBACK,
-    epochs: int = 15,
-    batch_size: int = 32,
-    verbose: int = 2,
+    evaluation_dir: Path,
+    xgboost_trials: int = 12,
+    epochs: int = DEFAULT_LSTM_CONFIG["epochs"],
+    verbose: int = 0,
     seed: int = SEED,
 ) -> pd.DataFrame:
-    if lookback < LSTM_LOOKBACK:
-        raise ValueError(f"lookback must be at least {LSTM_LOOKBACK}.")
-    if epochs < 1 or batch_size < 1:
-        raise ValueError("epochs and batch_size must be positive.")
+    """Refit every SKU on all rows, save its bundle and the metrics files; return a summary."""
+    import tensorflow as tf
 
+    from training.metrics_file import write_metrics
+    from training.rolling_origin import library_versions
+
+    if xgboost_trials < 1 or epochs < 1:
+        raise ValueError("xgboost_trials and epochs must be positive.")
+    tf.config.experimental.enable_op_determinism()
+
+    versions = library_versions()
+    LOGGER.info("Library versions: %s", json.dumps(versions))
     model_version = (
         datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
     )
     data = load_daily_data(data_path)
     if data.empty:
         raise ValueError("Training data contains no SKU rows.")
-    results: dict[str, FittedSku] = {}
-    output_dir.mkdir(parents=True, exist_ok=True)
+    estimates, window = final_test_estimates(evaluation_dir)
+    missing = sorted(set(data["product_sku"]) - set(estimates.index))
+    if missing:
+        raise ValueError(f"No final_test estimate for SKU(s) {missing}; re-run the evaluation.")
 
+    output_dir.mkdir(parents=True, exist_ok=True)
+    rows, trial_log = [], []
     for sku, sku_data in data.groupby("product_sku", sort=True):
-        LOGGER.info("Training SKU %s (%s daily rows)", sku, len(sku_data))
+        LOGGER.info("Refitting SKU %s on %s daily rows", sku, len(sku_data))
+        sku_data = sku_data.reset_index(drop=True)
         fitted = fit_sku(
-            sku_data.reset_index(drop=True),
-            lookback,
+            sku_data,
+            estimates.loc[sku],
+            window,
+            xgboost_trials,
             epochs,
-            batch_size,
             verbose,
             seed,
             model_version,
+            versions,
         )
         saved_dir = save_sku_bundle(output_dir, sku, fitted)
-        results[sku] = fitted
-        LOGGER.info("Saved complete model bundle: %s", saved_dir)
-
-    table = comparison_table(results)
-    print("\nFinal test comparison (RMSE / MAPE / sMAPE):")
-    print(table.to_string(float_format=lambda value: f"{value:.4f}"))
-
-    for sku in results:
-        bundle_path = output_dir / sku
-        manifest = verify_artifact_bundle(bundle_path)
+        manifest = verify_artifact_bundle(saved_dir)
         if manifest["model_version"] != model_version:
             raise RuntimeError(f"SKU {sku} metadata has an unexpected training timestamp.")
-        if not np.isclose(manifest["rmse_score"], results[sku].final_metrics["Stacked"]["RMSE"]):
-            raise RuntimeError(f"SKU {sku} metadata RMSE does not match its final-test score.")
+        check_prediction = check_skip_equivalence(output_dir, sku, sku_data)
+        trial_log.extend(fitted.xgboost_trials)
+        rows.append(
+            {
+                "sku": sku,
+                "rmse_score": manifest["rmse_score"],
+                "ensemble_mode": manifest["ensemble_mode"],
+                "xgboost_config": json.dumps(manifest["xgboost_config"], sort_keys=True),
+                "last_day_check_prediction": round(check_prediction, 2),
+            }
+        )
+        LOGGER.info("Saved and verified model bundle: %s", saved_dir)
 
-    print(
-        f"\nVerified complete artifact and metadata bundles for {len(results)} SKU(s) "
-        f"under {output_dir}."
-    )
+    pd.DataFrame(trial_log).to_csv(output_dir / "final_xgboost_tuning.csv", index=False)
+    write_metrics(evaluation_dir, output_dir, model_version)
+    table = pd.DataFrame(rows).set_index("sku")
+    print(f"\nmodel_version {model_version}; bundles and metrics files under {output_dir}")
+    print(table.to_string())
     return table
 
 
@@ -580,9 +448,9 @@ def main() -> int:
         run_training(
             data_path=args.data,
             output_dir=args.output,
-            lookback=args.lookback,
+            evaluation_dir=args.evaluation,
+            xgboost_trials=args.xgboost_trials,
             epochs=args.epochs,
-            batch_size=args.batch_size,
             verbose=args.verbose,
             seed=args.seed,
         )
