@@ -24,4 +24,9 @@ class Product extends Model
     {
         return $this->hasMany(ForecastRecord::class);
     }
+
+    public function stockMovements(): HasMany
+    {
+        return $this->hasMany(StockMovement::class);
+    }
 }

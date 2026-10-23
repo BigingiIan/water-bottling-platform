@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\Models\User;
+use App\Services\SettingsService;
+use App\Services\UserPreferenceService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\View;
@@ -16,7 +18,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->scoped(SettingsService::class);
+        $this->app->scoped(UserPreferenceService::class);
     }
 
     /**
@@ -49,13 +52,25 @@ class AppServiceProvider extends ServiceProvider
                     ->pluck('modules.slug')
                     ->all()
                 : [];
+            $fullAccessModuleSlugs = $user?->role_id
+                ? DB::table('role_module_permissions')
+                    ->join('modules', 'modules.id', '=', 'role_module_permissions.module_id')
+                    ->where('role_module_permissions.role_id', $user->role_id)
+                    ->where('role_module_permissions.access_level', 'full')
+                    ->pluck('modules.slug')
+                    ->all()
+                : [];
+
+            $unreadNotificationCount = $user instanceof User ? $user->unreadNotifications()->count() : 0;
 
             $view->with(compact(
                 'accessibleModuleSlugs',
                 'canImpersonate',
+                'fullAccessModuleSlugs',
                 'impersonationUsers',
                 'impersonator',
                 'isImpersonating',
+                'unreadNotificationCount',
             ));
         });
     }

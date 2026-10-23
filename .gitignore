@@ -28,6 +28,7 @@ Thumbs.db
 /model_reference
 /ml/models/
 /ml/saved_models/
+/ml/outputs/
 __pycache__/
 *.py[cod]
 /data/

@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\ProductionLine;
 use App\Models\ProductionSchedule;
 use App\Models\User;
+use App\Services\NotificationService;
 use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -115,6 +116,7 @@ class ProductionRuns extends Component
 
         $run->update(['status' => 'complete']);
         $this->confirmingCompletion = null;
+        app(NotificationService::class)->productionRunCompleted($run, $user);
     }
 
     public function render(): View

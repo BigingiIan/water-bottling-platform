@@ -6,7 +6,7 @@
     'description' => 'An unexpected error occurred while processing your request. This has been logged automatically — try again in a moment.',
     'actions' => [
         ['label' => 'Try Again', 'reload' => true, 'style' => 'primary'],
-        ['label' => '← Back to Dashboard', 'href' => route('dashboard'), 'style' => 'secondary'],
+        ['label' => '← Back to Home', 'href' => url('/'), 'style' => 'secondary'],
     ],
     'showMeta' => true,
 ])

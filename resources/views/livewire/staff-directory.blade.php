@@ -5,6 +5,11 @@
             <p class="mt-0.5 text-xs text-gray-500">{{ $users->total() }} users</p>
         </div>
         <div class="flex shrink-0 gap-2">
+            @if ($canInvite)
+                <button type="button" wire:click="$dispatch('open-invite-modal')" class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+                    + Invite User
+                </button>
+            @endif
             <button type="button" class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
                 Export
             </button>
@@ -52,12 +57,13 @@
                     <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Status</th>
                     <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Modules</th>
                     <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Last Active</th>
+                    <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5"><span class="sr-only">Actions</span></th>
                 </tr>
             </thead>
             <tbody>
                 @forelse ($users as $member)
                     @php
-                        $roleStyles = $rolePresentation[$member->role->slug] ?? $rolePresentation['production-staff'];
+                        $roleStyles = $rolePresentation[$member->role->slug] ?? ['class' => 'bg-gray-100 text-gray-600', 'avatarColor' => '#475569'];
                         $statusStyles = $statusPresentation[$member->status];
                         $accessibleModules = $member->role->modules
                             ->filter(fn ($module) => $module->pivot->access_level !== 'none')
@@ -98,10 +104,30 @@
                         </td>
                         <td class="border-b border-gray-100 px-[18px] py-3 font-mono text-xs text-gray-700">{{ $accessibleModules ?: '—' }}</td>
                         <td class="border-b border-gray-100 px-[18px] py-3 text-[13px] text-gray-700">{{ $member->last_active_at?->diffForHumans() ?? '—' }}</td>
+                        <td class="border-b border-gray-100 px-[18px] py-3">
+                            @if ($canInvite)
+                                <div class="relative flex justify-end">
+                                    <button
+                                        type="button"
+                                        wire:click="toggleMenu({{ $member->id }})"
+                                        aria-label="Actions for {{ $member->name }}"
+                                        aria-expanded="{{ $openMenuUserId === $member->id ? 'true' : 'false' }}"
+                                        class="flex size-7 items-center justify-center rounded-md text-[12.5px] text-gray-500 hover:bg-gray-100"
+                                    >⋯</button>
+                                    @if ($openMenuUserId === $member->id)
+                                        <div role="menu" aria-label="Actions for {{ $member->name }}" class="absolute right-0 top-8 z-20 w-44 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg">
+                                            <button type="button" role="menuitem" wire:click="$dispatch('open-role-modal', { userId: {{ $member->id }} })" class="block w-full px-3.5 py-2 text-left text-[13px] text-gray-700 hover:bg-gray-50">Change role</button>
+                                            <button type="button" role="menuitem" wire:click="$dispatch('open-suspend-modal', { userId: {{ $member->id }} })" class="block w-full px-3.5 py-2 text-left text-[13px] text-gray-700 hover:bg-gray-50">{{ $member->status === 'suspended' ? 'Reactivate' : 'Suspend' }}</button>
+                                            <button type="button" role="menuitem" wire:click="$dispatch('open-reset-modal', { userId: {{ $member->id }} })" class="block w-full px-3.5 py-2 text-left text-[13px] text-gray-700 hover:bg-gray-50">Reset password</button>
+                                        </div>
+                                    @endif
+                                </div>
+                            @endif
+                        </td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5" class="px-[18px] py-8 text-center text-sm text-gray-500">No staff match these filters.</td>
+                        <td colspan="6" class="px-[18px] py-8 text-center text-sm text-gray-500">No staff match these filters.</td>
                     </tr>
                 @endforelse
             </tbody>
@@ -154,4 +180,8 @@
             >›</button>
         </div>
     </nav>
+
+    <livewire:invite-user-modal />
+
+    <livewire:user-actions-modal />
 </section>

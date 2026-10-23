@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
+use App\Services\UserPreferenceService;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -19,7 +22,7 @@ class AuthenticatedSessionController extends Controller
         return view('auth.login');
     }
 
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, UserPreferenceService $preferences): RedirectResponse
     {
         $credentials = $request->validate([
             'email' => ['required', 'string', 'email'],
@@ -43,8 +46,24 @@ class AuthenticatedSessionController extends Controller
         if (! Auth::attempt([
             'email' => $credentials['email'],
             'password' => $credentials['password'],
-            'status' => 'active',
         ], $request->boolean('remember'))) {
+            RateLimiter::hit($throttleKey, 60);
+
+            throw ValidationException::withMessages([
+                'email' => __('auth.failed'),
+            ]);
+        }
+
+        /** @var User $user */
+        $user = Auth::user();
+        $user->refresh();
+
+        if ($user->status === 'suspended' || ($user->status !== 'active' && ! ($user->status === 'pending' && $user->must_change_password))) {
+            DB::table('sessions')->where('user_id', $user->getKey())->delete();
+
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
             RateLimiter::hit($throttleKey, 60);
 
             throw ValidationException::withMessages([
@@ -55,7 +74,11 @@ class AuthenticatedSessionController extends Controller
         RateLimiter::clear($throttleKey);
         $request->session()->regenerate();
 
-        return redirect()->route('dashboard');
+        if ($user->must_change_password) {
+            return redirect()->route('password.set');
+        }
+
+        return redirect()->to($preferences->landingUrl($user));
     }
 
     public function destroy(Request $request): RedirectResponse

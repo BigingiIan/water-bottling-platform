@@ -2,7 +2,7 @@
     <div class="mb-5 flex items-end justify-between gap-4">
         <div>
             <h1 class="text-[21px] font-extrabold tracking-tight text-gray-900">Production Schedule</h1>
-            <p class="mt-1 text-[13px] text-gray-500">{{ now()->format('d F Y') }}</p>
+            <p class="mt-1 text-[13px] text-gray-500">{{ app(\App\Support\SettingsDate::class)->formatInstantDate(now()) }}</p>
         </div>
         @if (app(\App\Support\ModuleAccess::class)->can(auth()->user(), 'production', true))
             <div class="flex shrink-0 gap-2">

@@ -1,22 +1,34 @@
 # ML forecast service
 
-Train and export the per-SKU models from the repository root:
+Evaluate, then refit and export the per-SKU models, from the `ml` directory:
 
 ```powershell
-uv run --directory ml python training/train_pipeline.py `
-  --data ..\data\kenya_water_demand_daily.csv `
-  --output saved_models
+uv run python -m training.rolling_origin --output outputs/rolling_origin/baseline
+uv run python -m training.tuning
+uv run python -m training.stacking
+uv run python -m training.tuning --period final_test --tuned-models xgboost `
+  --models naive prophet xgboost lstm --output outputs/rolling_origin/final_test
+uv run python -m training.stacking --period final_test
+uv run python -m training.train_pipeline
 ```
 
-The input CSV must contain `date`, `product_sku`, `units_sold`,
-`is_promotion`, `is_public_holiday`, `is_school_term`, and `temperature_c`.
-Each SKU is split chronologically into 60% base training, 20% stacker training,
-and 20% final testing. The trainer prints Prophet/XGBoost/LSTM/Stacked RMSE,
-MAPE, and sMAPE scores and verifies each exported artifact bundle before
-returning successfully. `metadata.json` is written as requested, and an
-identical `manifest.json` is written because that is the filename consumed by
-the current FastAPI model loader. Likewise, `meta_stacker.joblib` is exported
-alongside `meta_learner.joblib`, which is the filename the API loads.
+The input CSV (default `..\data\kenya_water_demand_daily.csv`) must contain
+`date`, `product_sku`, `units_sold`, `is_promotion`, `is_public_holiday`,
+`is_school_term`, and `temperature_c`. Evaluation uses rolling origins with
+monthly-mean temperature; `--period final_test` is meant to run once. The
+trainer refits the chosen configuration (Prophet alone, stacker weights
+`[1, 0, 0]`) on every row, still fits and saves XGBoost and the LSTM, and sets
+`rmse_score` to Prophet's final_test h=1 RMSE. `metadata.json` and an identical
+`manifest.json` are written, as are `meta_stacker.joblib` and
+`meta_learner.joblib`. Next to the SKU directories it writes
+`forecast_metrics.csv`, `forecast_metrics_summary.csv` and
+`metrics_manifest.json` (every run per SKU, model and fold, with the final_test
+runs flagged) for a dashboard.
+
+All inference lives in `serving/inference.py`:
+`predict_sku(sku, horizon_days, context_df)` returns a DataFrame and has no
+web-framework code. Models whose stacker weight is exactly zero are neither
+loaded nor run.
 
 The service defaults to `ml/saved_models`; set `ML_MODEL_DIR` only if the
 artifacts are stored elsewhere:
@@ -42,6 +54,11 @@ SKU directory must contain:
   such as its ISO date) and `rmse_score` (the SKU's stacked final-test RMSE),
   plus optional `prophet_regressors`, `xgboost_feature_cols`, and
   `lstm_lookback` overrides. The default LSTM lookback is 14 days.
+
+Bundles whose manifest has `stacker_weights` are served through `predict_sku()`.
+They use the monthly temperature means stored in the manifest, so the request's
+`temperature_c` values are accepted but not used. Older bundles keep the
+original loader and use the request's temperatures.
 
 `POST /predict` accepts `sku`, ISO `date`, the target day's four context
 features, and an ordered `history` of at least 14 consecutive daily rows. Each

@@ -162,7 +162,7 @@
                     <tbody>
                         @forelse ($detailLogs as $log)
                             <tr wire:key="run-log-{{ $log->id }}" class="transition-colors hover:bg-gray-50">
-                                <td class="border-b border-gray-100 px-[18px] py-3 font-mono text-xs text-gray-700">{{ $log->logged_at?->format('H:i') }}</td>
+                                <td class="border-b border-gray-100 px-[18px] py-3 font-mono text-xs text-gray-700">{{ app(\App\Support\SettingsDate::class)->formatTime($log->logged_at) }}</td>
                                 <td class="border-b border-gray-100 px-[18px] py-3 text-[13px] text-gray-700">{{ $log->operator?->name ?? '—' }}</td>
                                 <td class="border-b border-gray-100 px-[18px] py-3 font-mono text-xs text-gray-700">{{ number_format((int) $log->units_logged) }}</td>
                                 <td class="border-b border-gray-100 px-[18px] py-3 text-[13px] text-gray-700">{{ $log->quality_status === 'flagged' ? 'Flagged for review' : 'Passed' }}</td>
