@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Models\AuditLog;
 use App\Models\Module;
 use App\Models\Role;
 use App\Models\User;
@@ -9,6 +10,7 @@ use App\Services\UserPreferenceService;
 use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
@@ -21,6 +23,8 @@ class StaffDirectory extends Component
 {
     use WithPagination;
 
+    private const RECENT_ACTIVITY_LIMIT = 8;
+
     public string $search = '';
 
     #[Url(as: 'role', except: '')]
@@ -31,6 +35,12 @@ class StaffDirectory extends Component
     public string $moduleFilter = '';
 
     public ?int $openMenuUserId = null;
+
+    /**
+     * The staff member shown in the detail panel; kept in the URL so the panel can be linked to.
+     */
+    #[Url(as: 'user', except: null)]
+    public ?int $selectedUserId = null;
 
     public function updatedSearch(): void
     {
@@ -52,6 +62,12 @@ class StaffDirectory extends Component
         $this->resetPage();
     }
 
+    public function clearFilters(): void
+    {
+        $this->reset(['search', 'roleFilter', 'statusFilter', 'moduleFilter']);
+        $this->resetPage();
+    }
+
     #[On('user-created')]
     public function refreshList(): void
     {
@@ -62,6 +78,17 @@ class StaffDirectory extends Component
     public function closeMenus(): void
     {
         $this->openMenuUserId = null;
+    }
+
+    public function openUser(int $userId): void
+    {
+        $this->openMenuUserId = null;
+        $this->selectedUserId = User::query()->whereKey($userId)->exists() ? $userId : null;
+    }
+
+    public function closeUser(): void
+    {
+        $this->selectedUserId = null;
     }
 
     public function toggleMenu(int $userId): void
@@ -114,9 +141,14 @@ class StaffDirectory extends Component
 
         $users = $this->filteredUsersQuery()
             ->paginate(app(UserPreferenceService::class)->pageSize($user, 6));
+        $selectedMember = $this->selectedUserId === null
+            ? null
+            : User::query()->with(['role.modules'])->find($this->selectedUserId);
 
         return view('livewire.staff-directory', [
             'users' => $users,
+            'selectedMember' => $selectedMember,
+            'selectedMemberActivity' => $selectedMember === null ? collect() : $this->recentActivityFor($selectedMember),
             'roles' => Role::query()->orderBy('name')->get(),
             'modules' => Module::query()->orderBy('name')->get(),
             'canInvite' => app(ModuleAccess::class)->can($user, 'users-roles', write: true),
@@ -133,6 +165,24 @@ class StaffDirectory extends Component
                 'suspended' => ['label' => 'Suspended', 'class' => 'bg-red-50 text-[#b91c1c]', 'dotClass' => 'bg-red-500'],
             ],
         ]);
+    }
+
+    /**
+     * Audit entries the staff member made or that were made about them, newest first.
+     *
+     * @return Collection<int, AuditLog>
+     */
+    private function recentActivityFor(User $member): Collection
+    {
+        return AuditLog::query()
+            ->with(['user:id,name', 'targetUser:id,name'])
+            ->where(fn (Builder $query) => $query
+                ->where('user_id', $member->id)
+                ->orWhere('target_user_id', $member->id))
+            ->latest('timestamp')
+            ->latest('id')
+            ->limit(self::RECENT_ACTIVITY_LIMIT)
+            ->get();
     }
 
     /**

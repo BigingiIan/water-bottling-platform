@@ -18,6 +18,8 @@ use App\Livewire\OrdersPage;
 use App\Livewire\ProductionHistory;
 use App\Livewire\ProductionRuns;
 use App\Livewire\ProfilePage;
+use App\Livewire\RequestDetail;
+use App\Livewire\RequestsPage;
 use App\Livewire\RevenuePage;
 use App\Livewire\RolePermissionMatrix;
 use App\Livewire\SettingsPage;
@@ -63,6 +65,10 @@ Route::middleware('auth')->group(function () {
         ->middleware('module.access:settings')
         ->name('audit-logs.redirect');
     Route::get('/notifications', NotificationsPage::class)->name('notifications.index');
+    Route::middleware('module.access:requests')->group(function () {
+        Route::get('/requests', RequestsPage::class)->name('requests.index');
+        Route::get('/requests/{departmentRequest}', RequestDetail::class)->name('requests.show');
+    });
     Route::get('/profile', ProfilePage::class)->name('profile.show');
     Route::post('/access-requests', [AccessRequestController::class, 'store'])->name('access-requests.store');
     Route::middleware('module.access:orders')->group(function () {

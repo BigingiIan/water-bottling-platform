@@ -138,6 +138,12 @@ class InventoryOverview extends Component
         $this->batchDateTo = $this->validDate($this->batchDateTo) ?? $today;
         $this->movementDateFrom = $this->validDate($this->movementDateFrom) ?? now()->subDays(6)->toDateString();
         $this->movementDateTo = $this->validDate($this->movementDateTo) ?? $today;
+
+        // Dashboard quick action deep link; ignored for read-only users instead of failing the page.
+        if (request()->query('open') === 'stock-count' && app(ModuleAccess::class)->can(auth()->user(), 'inventory', write: true)) {
+            $this->activeTab = 'stock';
+            $this->openStockCountModal();
+        }
     }
 
     public function updatedActiveTab(): void

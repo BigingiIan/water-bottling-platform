@@ -8,8 +8,8 @@
         @fonts
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="min-h-screen bg-gray-50 font-sans text-gray-800 antialiased">
-        <main class="flex min-h-screen flex-col items-center justify-center px-5 py-12">
+    <body class="flex min-h-screen flex-col bg-gray-50 font-sans text-gray-800 antialiased">
+        <main class="flex flex-1 flex-col items-center justify-center px-5 py-12">
             <a href="{{ route('login') }}" class="mb-7 flex items-center gap-2.5" aria-label="AquaOps sign in">
                 <x-brand-mark size="size-10" />
                 <span>
@@ -84,5 +84,7 @@
 
             <p class="mt-6 text-center text-xs text-gray-400">Access is managed by your AquaOps administrator.</p>
         </main>
+
+        <x-app-footer reduced />
     </body>
 </html>

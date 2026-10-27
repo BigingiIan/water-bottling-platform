@@ -8,8 +8,8 @@
         @fonts
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="min-h-screen bg-gray-50 font-sans text-gray-800 antialiased">
-        <main class="flex min-h-screen flex-col items-center justify-center px-5 py-12">
+    <body class="flex min-h-screen flex-col bg-gray-50 font-sans text-gray-800 antialiased">
+        <main class="flex flex-1 flex-col items-center justify-center px-5 py-12">
             <div class="mb-7 flex items-center gap-2.5" aria-label="AquaOps">
                 <x-brand-mark size="size-10" />
                 <span>
@@ -74,5 +74,7 @@
                 </form>
             </section>
         </main>
+
+        <x-app-footer reduced />
     </body>
 </html>

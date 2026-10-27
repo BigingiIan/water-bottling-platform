@@ -2,10 +2,13 @@
 
 namespace App\Providers;
 
+use App\Models\DepartmentRequest;
 use App\Models\User;
+use App\Services\Dashboard\DashboardMetrics;
 use App\Services\MLForecastClient;
 use App\Services\SettingsService;
 use App\Services\UserPreferenceService;
+use App\Support\Dashboard\DashboardWidgetRegistry;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\View;
@@ -22,6 +25,8 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(SettingsService::class);
         $this->app->scoped(UserPreferenceService::class);
         $this->app->scoped(MLForecastClient::class);
+        $this->app->scoped(DashboardWidgetRegistry::class);
+        $this->app->scoped(DashboardMetrics::class);
     }
 
     /**
@@ -64,6 +69,9 @@ class AppServiceProvider extends ServiceProvider
                 : [];
 
             $unreadNotificationCount = $user instanceof User ? $user->unreadNotifications()->count() : 0;
+            $openRequestCount = $user instanceof User && in_array('requests', $accessibleModuleSlugs, true)
+                ? DepartmentRequest::query()->openFor($user)->count()
+                : 0;
 
             $view->with(compact(
                 'accessibleModuleSlugs',
@@ -72,6 +80,7 @@ class AppServiceProvider extends ServiceProvider
                 'impersonationUsers',
                 'impersonator',
                 'isImpersonating',
+                'openRequestCount',
                 'unreadNotificationCount',
             ));
         });

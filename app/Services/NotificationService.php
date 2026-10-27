@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\DepartmentRequest;
 use App\Models\ErrorEvent;
 use App\Models\Invoice;
 use App\Models\LeakageReport;
@@ -10,10 +11,14 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\ProductionSchedule;
+use App\Models\RequestComment;
 use App\Models\User;
 use App\Notifications\SystemNotification;
 use App\Services\Leakage\LeakageDetector;
 use App\Services\Orders\Money;
+use App\Services\Requests\RequestPriority;
+use App\Services\Requests\RequestStatus;
+use App\Services\Requests\RequestType;
 use App\Support\LeakageReportFlag;
 use App\Support\Plural;
 use App\Support\SettingsDate;
@@ -220,6 +225,93 @@ class NotificationService
                 'key' => "production:{$run->id}:below_target",
             ], $actor);
         });
+    }
+
+    public function requestCreated(DepartmentRequest $request, ?User $actor): void
+    {
+        $this->guard('request', function () use ($request, $actor): void {
+            $request->loadMissing('sender:id,name');
+
+            $this->send($this->departmentMembers($request), [
+                'type' => 'request.created',
+                'title' => $request->type === RequestType::AccessRequest
+                    ? "{$request->sender->name} requested access: {$request->subject}"
+                    : "New request from {$request->sender->name}: {$request->subject}",
+                'body' => "{$request->reference} · {$request->type->label()} · {$request->priority->label()} priority",
+                'url' => route('requests.show', $request, absolute: false),
+                'severity' => $request->priority === RequestPriority::Urgent ? 'warning' : 'info',
+                'key' => "request:{$request->id}:created",
+            ], $actor);
+        });
+    }
+
+    public function requestStatusChanged(DepartmentRequest $request, RequestStatus $from, ?User $actor): void
+    {
+        $this->guard('request', function () use ($request, $from, $actor): void {
+            $request->loadMissing('sender');
+
+            if ($request->sender === null || $request->status === $from) {
+                return;
+            }
+
+            $this->send(new Collection([$request->sender]), [
+                'type' => 'request.status_changed',
+                'title' => "{$request->reference} is now {$request->status->label()}",
+                'body' => $request->resolution_note ?? "{$request->subject} moved from {$from->label()} to {$request->status->label()}.",
+                'url' => route('requests.show', $request, absolute: false),
+                'severity' => $request->status === RequestStatus::Declined ? 'warning' : 'info',
+                'key' => "request:{$request->id}:status:{$request->status->value}",
+            ], $actor);
+        });
+    }
+
+    /**
+     * Comments go to the other side of the thread: the sender, or the department (its assignee when set).
+     */
+    public function requestCommented(DepartmentRequest $request, RequestComment $comment, User $author): void
+    {
+        $this->guard('request', function () use ($request, $comment, $author): void {
+            $request->loadMissing(['sender', 'assignee']);
+            $recipients = $author->id === $request->from_user_id
+                ? ($request->assignee !== null ? new Collection([$request->assignee]) : $this->departmentMembers($request))
+                : new Collection(array_filter([$request->sender]));
+
+            $this->send($recipients, [
+                'type' => 'request.commented',
+                'title' => "{$author->name} commented on {$request->reference}",
+                'body' => mb_strimwidth($comment->body, 0, 140, '…'),
+                'url' => route('requests.show', $request, absolute: false),
+                'severity' => 'info',
+                'key' => "request:{$request->id}:comment:{$comment->id}",
+            ], $author);
+        });
+    }
+
+    public function requestOverdue(DepartmentRequest $request): void
+    {
+        $this->guard('request', function () use ($request): void {
+            $request->loadMissing('assignee');
+
+            $this->send($request->assignee !== null ? new Collection([$request->assignee]) : $this->departmentMembers($request), [
+                'type' => 'request.overdue',
+                'title' => "{$request->reference} is overdue",
+                'body' => "{$request->subject} was due ".app(SettingsDate::class)->formatDate($request->due_date).'.',
+                'url' => route('requests.show', $request, absolute: false),
+                'severity' => 'warning',
+                'key' => "request:{$request->id}:overdue",
+            ], null);
+        });
+    }
+
+    /**
+     * @return Collection<int, User>
+     */
+    private function departmentMembers(DepartmentRequest $request): Collection
+    {
+        return User::query()
+            ->where('status', '!=', 'suspended')
+            ->where('role_id', $request->to_role_id)
+            ->get();
     }
 
     /**

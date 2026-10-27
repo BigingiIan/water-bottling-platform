@@ -4,7 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Module;
 use App\Models\User;
-use App\Services\NotificationService;
+use App\Services\Requests\RequestAccess;
+use App\Services\Requests\RequestService;
 use App\Services\UserPreferenceService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -12,7 +13,11 @@ use Illuminate\Validation\Rule;
 
 class AccessRequestController extends Controller
 {
-    public function store(Request $request, NotificationService $notifications, UserPreferenceService $preferences): RedirectResponse
+    /**
+     * Turns "Request Access" on the 403 page into an access request for administrators to review.
+     * Approving it is a change in Roles & Permissions; nothing is granted here.
+     */
+    public function store(Request $request, RequestService $requests, RequestAccess $access, UserPreferenceService $preferences): RedirectResponse
     {
         $user = $request->user();
 
@@ -20,13 +25,14 @@ class AccessRequestController extends Controller
 
         $validated = $request->validate([
             'module' => ['required', 'string', Rule::exists('modules', 'slug')],
+            'page' => ['nullable', 'string', 'max:2000'],
         ]);
 
         $module = Module::query()->where('slug', $validated['module'])->firstOrFail();
-        $notifications->accessRequested($user, $module);
+        $accessRequest = $requests->requestAccess($user, $module, $validated['page'] ?? null);
 
         return redirect()
-            ->to($preferences->landingUrl($user))
-            ->with('status', "Access request for {$module->name} sent to your administrators.");
+            ->to($access->canView($user, $accessRequest) ? route('requests.show', $accessRequest) : $preferences->landingUrl($user))
+            ->with('status', "Access request {$accessRequest->reference} for {$module->name} sent to your administrators.");
     }
 }

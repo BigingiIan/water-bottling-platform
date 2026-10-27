@@ -3,6 +3,7 @@
 
 @php
     $settingsDate = app(\App\Support\SettingsDate::class);
+    $canSendRequests = app(\App\Services\Requests\RequestAccess::class)->canSendRequests(auth()->user());
     $thClasses = 'border-b border-gray-200 px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500';
     $secondaryButton = 'inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60';
     $primaryButton = 'inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700 disabled:opacity-60';
@@ -25,6 +26,9 @@
         <x-slot:actions>
             <x-order-status-badge :status="$order->status" class="mr-1" />
             <a href="{{ route('orders.index') }}" class="{{ $secondaryButton }}"><x-heroicon-o-arrow-left class="size-4" aria-hidden="true" />All orders</a>
+            @if ($canSendRequests)
+                <x-send-request-button related-type="order" :related-id="$order->id" />
+            @endif
             @if ($liveInvoice && $canViewInvoices)
                 <a href="{{ route('invoices.show', $liveInvoice) }}" class="{{ $secondaryButton }}"><x-heroicon-o-document-text class="size-4" aria-hidden="true" />View invoice {{ $liveInvoice->invoice_number ?? '(draft)' }}</a>
             @elseif ($canCreateInvoice)

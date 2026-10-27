@@ -33,7 +33,9 @@
 
         * { box-sizing: border-box; }
         body {
+            display: flex;
             min-height: 100vh;
+            flex-direction: column;
             margin: 0;
             background: var(--gray-50);
             color: var(--gray-800);
@@ -71,7 +73,7 @@
         .error-stage {
             position: relative;
             display: flex;
-            min-height: calc(100vh - 52px);
+            flex: 1;
             align-items: center;
             justify-content: center;
             padding: 48px 24px;
@@ -179,10 +181,23 @@
             font-family: "JetBrains Mono", Consolas, monospace;
             font-size: 11px;
         }
+        .site-footer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 6px 16px;
+            padding: 12px 24px;
+            border-top: 1px solid var(--gray-200);
+            background: var(--gray-50);
+            color: var(--gray-500);
+            font-size: 12px;
+        }
+        .site-footer strong { color: var(--gray-700); font-weight: 600; }
         @media (max-width: 480px) {
             .brand-caption { display: none; }
-            .error-stage { min-height: calc(100vh - 52px); padding: 32px 18px; }
+            .error-stage { padding: 32px 18px; }
             .error-meta { flex-direction: column; gap: 6px; }
+            .site-footer { flex-direction: column; padding: 12px 18px; }
         }
     </style>
 </head>
@@ -246,5 +261,11 @@
             @endif
         </section>
     </main>
+
+    @php($footerDetails = app(\App\Support\FooterDetails::class))
+    <footer class="site-footer">
+        <span><strong>{{ $footerDetails->organisationName() }}</strong> &middot; &copy; {{ $footerDetails->year() }}</span>
+        <span>AquaOps v{{ $footerDetails->version() }}</span>
+    </footer>
 </body>
 </html>

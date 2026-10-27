@@ -173,6 +173,11 @@
                     </tbody>
                 </table>
             </div>
+            @if (app(\App\Services\Requests\RequestAccess::class)->canSendRequests(auth()->user()))
+                <div class="flex justify-end border-t border-gray-100 px-[18px] py-3">
+                    <x-send-request-button related-type="production_run" :related-id="$detailRun->id" label="Send request about this run" />
+                </div>
+            @endif
             @if ($detailRun->status === 'active')
                 <div class="flex gap-2.5 px-[18px] py-[18px]">
                     @if ($canLog)

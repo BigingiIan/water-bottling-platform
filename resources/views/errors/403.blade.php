@@ -13,7 +13,7 @@
             'label' => 'Request Access',
             'icon' => 'paper-airplane',
             'form' => route('access-requests.store'),
-            'fields' => ['module' => $moduleSlug],
+            'fields' => ['module' => $moduleSlug, 'page' => '/'.ltrim(request()->path(), '/')],
             'style' => 'secondary',
         ];
     }

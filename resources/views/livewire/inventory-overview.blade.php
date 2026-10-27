@@ -1,3 +1,7 @@
+@php
+    $canSendRequests = app(\App\Services\Requests\RequestAccess::class)->canSendRequests(auth()->user());
+    $hasStockActions = $canWriteInventory || $canSendRequests;
+@endphp
 <div class="flex flex-col gap-6">
     @if (session('inventorySuccess'))
         <p role="status" class="rounded-md border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-800">{{ session('inventorySuccess') }}</p>
@@ -129,7 +133,7 @@
                         <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Level / minimum</th>
                         <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Status</th>
                         <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Last updated</th>
-                        @if ($canWriteInventory)
+                        @if ($hasStockActions)
                             <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5"><span class="sr-only">Actions</span></th>
                         @endif
                     </tr>
@@ -163,14 +167,21 @@
                                 <x-stock-status-badge :status="$status" />
                             </td>
                             <td class="border-b border-gray-100 px-[18px] py-3 text-xs text-gray-500">{{ app(\App\Support\SettingsDate::class)->formatDateTime($stockLine->last_updated) }}</td>
-                            @if ($canWriteInventory)
+                            @if ($hasStockActions)
                                 <td class="border-b border-gray-100 px-[18px] py-3 text-right">
-                                    <button type="button" wire:click="openAdjustmentModal({{ $stockLine->id }})" class="rounded-md px-2.5 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100">Adjust</button>
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        @if ($canWriteInventory)
+                                            <button type="button" wire:click="openAdjustmentModal({{ $stockLine->id }})" class="rounded-md px-2.5 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100">Adjust</button>
+                                        @endif
+                                        @if ($canSendRequests)
+                                            <x-send-request-button related-type="stock_line" :related-id="$stockLine->id" compact label="Send request about this stock line" />
+                                        @endif
+                                    </div>
                                 </td>
                             @endif
                         </tr>
                     @empty
-                        <tr><td colspan="{{ $canWriteInventory ? 7 : 6 }}" class="px-4 py-8 text-center text-sm text-gray-500">No stock lines match these filters.</td></tr>
+                        <tr><td colspan="{{ $hasStockActions ? 7 : 6 }}" class="px-4 py-8 text-center text-sm text-gray-500">No stock lines match these filters.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -264,6 +275,9 @@
                             <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Yield</th>
                             <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Status</th>
                             <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Operator</th>
+                            @if ($canSendRequests)
+                                <th scope="col" class="px-[18px] py-2.5"><span class="sr-only">Actions</span></th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody>
@@ -286,9 +300,14 @@
                                 <td class="px-[18px] py-3 tabular-nums">{{ number_format($yieldPercent, 1) }}%</td>
                                 <td class="px-[18px] py-3"><span class="rounded-full px-2.5 py-1 text-[11px] font-bold {{ $batchBadgeClass }}">{{ str_replace('_', ' ', ucfirst($batch->status)) }}</span></td>
                                 <td class="px-[18px] py-3">{{ $batch->user?->name ?? '—' }}</td>
+                                @if ($canSendRequests)
+                                    <td class="px-[18px] py-3 text-right">
+                                        <x-send-request-button related-type="batch" :related-id="$batch->id" compact label="Send request about batch B-{{ str_pad((string) $batch->id, 5, '0', STR_PAD_LEFT) }}" />
+                                    </td>
+                                @endif
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="px-4 py-8 text-center text-sm text-gray-500">No batches match these filters.</td></tr>
+                            <tr><td colspan="{{ $canSendRequests ? 7 : 6 }}" class="px-4 py-8 text-center text-sm text-gray-500">No batches match these filters.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -427,6 +446,9 @@
                                             <span class="mx-1 text-gray-300" aria-hidden="true">|</span>
                                         @endif
                                         <button type="button" wire:click="openReviewModal({{ $report->id }}, 'resolve')" class="text-xs font-semibold text-blue-700 hover:text-blue-900">Resolve</button>
+                                    @endif
+                                    @if ($canSendRequests)
+                                        <x-send-request-button related-type="leakage_report" :related-id="$report->id" compact label="Send request about leakage report #{{ $report->id }}" class="ml-2 align-middle" />
                                     @endif
                                 </td>
                             </tr>

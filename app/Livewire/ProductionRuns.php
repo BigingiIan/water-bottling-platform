@@ -42,6 +42,15 @@ class ProductionRuns extends Component
         $requestedDate = request()->query('date');
 
         $this->selectedDate = $this->resolveDate(is_string($requestedDate) ? $requestedDate : null);
+
+        // Deep link from a request: open that run on its own day.
+        $requestedRunId = request()->query('run');
+        $requestedRun = is_numeric($requestedRunId) ? ProductionSchedule::query()->find((int) $requestedRunId) : null;
+
+        if ($requestedRun instanceof ProductionSchedule) {
+            $this->selectedRunId = $requestedRun->id;
+            $this->selectedDate = $this->resolveDate(Carbon::parse($requestedRun->scheduled_date)->toDateString());
+        }
     }
 
     public function updatedSelectedDate(): void

@@ -22,6 +22,7 @@
             'label' => null,
             'items' => [
                 ['label' => 'Dashboard', 'module' => 'dashboard', 'alwaysVisible' => true, 'icon' => 'squares-2x2', 'href' => route('dashboard')],
+                ['label' => 'Requests', 'module' => 'requests', 'icon' => 'inbox-arrow-down', 'href' => route('requests.index'), 'badge' => $openRequestCount],
             ],
         ],
         [
@@ -94,8 +95,13 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="min-h-screen bg-gray-50 text-gray-800 antialiased">
-        <div class="flex min-h-screen">
-            <aside class="sticky top-0 flex h-screen w-[248px] shrink-0 flex-col bg-navy-950 py-5 text-gray-300 print:hidden">
+        <div class="flex min-h-screen" x-data="{ sidebarOpen: false }" x-on:keydown.escape.window="sidebarOpen = false">
+            <div x-show="sidebarOpen" x-on:click="sidebarOpen = false" style="display: none" aria-hidden="true" class="fixed inset-0 z-40 bg-gray-900/45 lg:hidden"></div>
+            <aside
+                id="main-sidebar"
+                x-bind:class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+                class="fixed inset-y-0 left-0 z-50 flex h-screen w-[248px] shrink-0 -translate-x-full flex-col overflow-y-auto bg-navy-950 py-5 text-gray-300 transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:translate-x-0! print:hidden"
+            >
                 <a href="/" class="mb-4 flex items-center gap-2.5 border-b border-white/[0.08] px-5 pb-[22px]">
                     <x-brand-mark />
                     <span>
@@ -124,7 +130,13 @@
                                         ])
                                     >
                                         <x-dynamic-component :component="'heroicon-o-'.$navigationItem['icon']" class="size-5 shrink-0" aria-hidden="true" />
-                                        <span>{{ $navigationItem['label'] }}</span>
+                                        <span class="flex-1">{{ $navigationItem['label'] }}</span>
+                                        @if (($navigationItem['badge'] ?? 0) > 0)
+                                            <span class="inline-flex min-w-5 justify-center rounded-full bg-blue-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                                                {{ $navigationItem['badge'] > 99 ? '99+' : $navigationItem['badge'] }}
+                                                <span class="sr-only">open</span>
+                                            </span>
+                                        @endif
                                     </a>
                                 @endforeach
                             </div>
@@ -145,8 +157,19 @@
 
             <div class="flex min-w-0 flex-1 flex-col">
                 <header class="sticky top-0 z-10 border-b border-gray-200 bg-white print:hidden">
-                    <div class="flex h-[60px] items-center justify-between px-6">
-                        <nav aria-label="Breadcrumb" class="flex items-center gap-1.5 text-[13px] text-gray-500">
+                    <div class="flex h-[60px] items-center justify-between gap-3 px-4 sm:px-6">
+                        <button
+                            type="button"
+                            x-on:click="sidebarOpen = true"
+                            aria-controls="main-sidebar"
+                            x-bind:aria-expanded="sidebarOpen ? 'true' : 'false'"
+                            aria-expanded="false"
+                            class="-ml-1 flex size-9 shrink-0 items-center justify-center rounded-md text-gray-600 hover:bg-gray-100 lg:hidden"
+                        >
+                            <x-heroicon-o-bars-3 class="size-6" aria-hidden="true" />
+                            <span class="sr-only">Open navigation</span>
+                        </button>
+                        <nav aria-label="Breadcrumb" class="flex min-w-0 flex-1 items-center gap-1.5 truncate text-[13px] text-gray-500">
                             <span>{{ $breadcrumbSection }}</span>
                             <span aria-hidden="true">/</span>
                             <span aria-current="page" class="font-semibold text-gray-800">{{ $title }}</span>
@@ -282,7 +305,7 @@
                     @endif
                 </header>
 
-                <main class="min-h-0 flex-1 p-6 sm:px-7 sm:pb-10 print:p-0">
+                <main class="min-h-0 flex-1 p-4 sm:p-6 sm:px-7 sm:pb-10 print:p-0">
                     @if (session('status'))
                         <p role="status" class="mb-6 flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-800">
                             <x-heroicon-o-check-circle class="size-5 shrink-0" aria-hidden="true" />
@@ -291,6 +314,12 @@
                     @endif
                     {{ $slot }}
                 </main>
+
+                <x-app-footer :show-forecast-status="in_array('forecasting', $accessibleModuleSlugs, true)" />
+
+                @if (in_array('requests', $fullAccessModuleSlugs, true))
+                    <livewire:send-request-modal />
+                @endif
             </div>
         </div>
     </body>

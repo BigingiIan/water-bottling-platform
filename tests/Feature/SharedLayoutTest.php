@@ -64,12 +64,12 @@ class SharedLayoutTest extends TestCase
         $this->actingAs($this->userWithRole('administrator'));
 
         $pages = [
-            '/staff' => ['staff-directory-heading', 'Staff Directory'],
-            '/staff/permissions' => ['permission-matrix-heading', 'Roles &amp; Permissions'],
-            '/system/errors' => ['error-logs-heading', 'Error Logs'],
+            '/staff' => ['staff-directory-heading', 'Staff Directory', 'staff-directory-heading'],
+            '/staff/permissions' => ['permission-matrix-heading', 'Roles &amp; Permissions', 'roles-heading'],
+            '/system/errors' => ['error-logs-heading', 'Error Logs', 'error-logs-heading'],
         ];
 
-        foreach ($pages as $uri => [$headingId, $title]) {
+        foreach ($pages as $uri => [$headingId, $title, $firstSectionLabel]) {
             $content = $this->get($uri)->assertOk()->getContent();
 
             $this->assertMatchesRegularExpression(
@@ -77,7 +77,7 @@ class SharedLayoutTest extends TestCase
                 $content,
             );
             $this->assertLessThan(
-                strpos($content, '<section aria-labelledby="'.$headingId.'"'),
+                strpos($content, '<section aria-labelledby="'.$firstSectionLabel.'"'),
                 strpos($content, '<header class="flex flex-wrap items-end'),
                 "{$uri} should render its page header above the card.",
             );
@@ -137,7 +137,7 @@ class SharedLayoutTest extends TestCase
         $csv = base64_decode(data_get($component->effects, 'download.content'));
 
         $this->assertStringContainsString("name,email,role,status,modules,last_active_at\n", $csv);
-        $this->assertStringContainsString('"Peter Production",peter@example.com,"Production Staff",active,"Dashboard (view); Production (full)",', $csv);
+        $this->assertStringContainsString('"Peter Production",peter@example.com,"Production Staff",active,"Requests (full); Dashboard (view); Production (full)",', $csv);
         $this->assertStringNotContainsString('ada@example.com', $csv);
     }
 

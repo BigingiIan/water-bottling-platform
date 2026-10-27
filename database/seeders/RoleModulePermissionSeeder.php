@@ -27,6 +27,7 @@ class RoleModulePermissionSeeder extends Seeder
                 'error-logs' => 'full',
                 'invoicing' => 'full',
                 'revenue' => 'full',
+                'requests' => 'full',
             ],
             'production-manager' => [
                 'dashboard' => 'full',
@@ -40,6 +41,7 @@ class RoleModulePermissionSeeder extends Seeder
                 'error-logs' => 'none',
                 'invoicing' => 'none',
                 'revenue' => 'none',
+                'requests' => 'full',
             ],
             'production-staff' => [
                 'dashboard' => 'view',
@@ -53,6 +55,7 @@ class RoleModulePermissionSeeder extends Seeder
                 'error-logs' => 'none',
                 'invoicing' => 'none',
                 'revenue' => 'none',
+                'requests' => 'full',
             ],
             'inventory-staff' => [
                 'dashboard' => 'view',
@@ -66,6 +69,7 @@ class RoleModulePermissionSeeder extends Seeder
                 'error-logs' => 'none',
                 'invoicing' => 'none',
                 'revenue' => 'none',
+                'requests' => 'full',
             ],
             'maintenance-staff' => [
                 'dashboard' => 'view',
@@ -79,6 +83,7 @@ class RoleModulePermissionSeeder extends Seeder
                 'error-logs' => 'none',
                 'invoicing' => 'none',
                 'revenue' => 'none',
+                'requests' => 'full',
             ],
         ];
 

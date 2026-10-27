@@ -118,6 +118,18 @@ return [
             'default' => 1.0,
             'rules' => ['required', 'numeric', 'between:0.5,14'],
         ],
+        'requests.default_due_days' => [
+            'field' => 'requests_default_due_days',
+            'group' => 'requests',
+            'tab' => 'operations',
+            'label' => 'Default request due time (days)',
+            'description' => 'New requests are due this many days after they are sent unless the sender picks a date.',
+            'type' => 'int',
+            'input' => 'number',
+            'step' => 1,
+            'default' => 2,
+            'rules' => ['required', 'integer', 'between:0,30'],
+        ],
         'leakage.review_percent' => [
             'field' => 'leakage_review_percent',
             'group' => 'leakage',

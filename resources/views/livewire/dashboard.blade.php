@@ -1,170 +1,175 @@
 @php
     $settingsDate = app(\App\Support\SettingsDate::class);
-    $coverWarningDays = (float) app(\App\Services\SettingsService::class)->get('inventory.cover_warning_days', 1.0);
-    $hasModuleCards = $production !== null || $stockAlerts !== null || $forecastCover !== null;
-    $severityDotClasses = ['info' => 'bg-blue-500', 'warning' => 'bg-amber-500', 'critical' => 'bg-red-500'];
-    $emptyClasses = 'flex flex-1 flex-col items-center justify-center gap-1.5 py-4 text-center text-sm text-gray-500';
+    $severityPresentation = [
+        'critical' => ['label' => 'Critical', 'icon' => 'exclamation-circle', 'class' => 'bg-red-50 text-[#b91c1c]', 'rail' => 'bg-red-500'],
+        'high' => ['label' => 'High', 'icon' => 'exclamation-triangle', 'class' => 'bg-amber-50 text-[#b45309]', 'rail' => 'bg-amber-500'],
+        'warning' => ['label' => 'Low', 'icon' => 'information-circle', 'class' => 'bg-blue-50 text-[#1d4ed8]', 'rail' => 'bg-blue-400'],
+    ];
 @endphp
 
 <div class="flex flex-col gap-6">
     <x-page-header
         heading-id="dashboard-heading"
         :title="'Welcome back, '.$user->name"
-        :subtitle="$settingsDate->formatInstantDate(now()).' · Here is what needs your attention today.'"
-    />
-
-    @if ($production !== null || $stockAlerts !== null)
-        <div class="grid gap-[18px] sm:grid-cols-2 xl:grid-cols-4">
-            @if ($production !== null)
-                <x-dashboard-card title="Today's output" icon="cube" :href="route('production.schedule')" link-label="Schedule">
-                    @if ($production['scheduledRuns'] === 0)
-                        <div class="{{ $emptyClasses }}">
-                            <p>No runs scheduled today.</p>
-                            @if ($canCreateSchedule)
-                                <a href="{{ route('production.schedule') }}" class="text-xs font-semibold text-blue-700 hover:text-blue-900">Create a schedule</a>
-                            @endif
-                        </div>
-                    @else
-                        <p class="text-2xl font-extrabold tabular-nums text-gray-900">
-                            {{ number_format($production['actual']) }}
-                            <span class="text-sm font-semibold text-gray-400">/ {{ \App\Support\Plural::count($production['target'], 'unit') }}</span>
-                        </p>
-                        <div class="mt-3 h-1.5 overflow-hidden rounded bg-gray-100" role="progressbar" aria-valuenow="{{ min(100, $production['percent']) }}" aria-valuemin="0" aria-valuemax="100" aria-label="Output against today's target">
-                            <div class="h-full rounded bg-blue-500" style="width: {{ min(100, $production['percent']) }}%"></div>
-                        </div>
-                        <p class="mt-2 text-xs text-gray-500">{{ $production['percent'] }}% of target across {{ \App\Support\Plural::count($production['scheduledRuns'], 'run') }}</p>
-                    @endif
-                </x-dashboard-card>
-
-                <x-dashboard-card title="Open runs" icon="play-circle" :href="route('production.runs')" link-label="Runs">
-                    @if ($production['openRuns']->isEmpty())
-                        <p class="{{ $emptyClasses }}">No open runs today. Every scheduled run is complete.</p>
-                    @else
-                        <p class="text-2xl font-extrabold tabular-nums text-gray-900">{{ $production['openRuns']->count() }}</p>
-                        <ul class="mt-2 space-y-1.5 text-xs text-gray-600">
-                            @foreach ($production['openRuns']->take(3) as $run)
-                                <li wire:key="dashboard-run-{{ $run->id }}" class="flex items-center justify-between gap-2">
-                                    <span class="truncate"><b class="font-semibold text-gray-800">{{ $run->product_sku }}</b> · {{ $run->productionLine?->name ?? 'Line' }} · {{ mb_substr((string) $run->scheduled_time, 0, 5) }}</span>
-                                    <span @class(['shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold', 'bg-blue-50 text-[#1d4ed8]' => $run->status === 'active', 'bg-gray-100 text-gray-600' => $run->status !== 'active'])>{{ ucfirst($run->status) }}</span>
-                                </li>
-                            @endforeach
-                        </ul>
-                        @if ($production['openRuns']->count() > 3)
-                            <p class="mt-1.5 text-xs text-gray-500">and {{ $production['openRuns']->count() - 3 }} more</p>
-                        @endif
-                    @endif
-                </x-dashboard-card>
+        :subtitle="($user->role?->name ?? 'Staff').' · '.$settingsDate->formatInstantDate(now())"
+    >
+        <x-slot:actions>
+            @if ($permittedWidgets !== [] && ! $customising)
+                <button type="button" wire:click="startCustomising" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
+                    <x-heroicon-o-adjustments-horizontal class="size-4" aria-hidden="true" />
+                    Customise
+                </button>
             @endif
+        </x-slot:actions>
+    </x-page-header>
 
-            @if ($stockAlerts !== null)
-                <x-dashboard-card title="Stock alerts" icon="archive-box" :href="route('inventory.overview')" link-label="Stock">
-                    @if ($stockAlerts->isEmpty())
-                        <p class="{{ $emptyClasses }}">All products are above their reorder thresholds.</p>
-                    @else
-                        <p class="text-2xl font-extrabold tabular-nums text-gray-900">{{ \App\Support\Plural::count($stockAlerts->count(), 'product') }}</p>
-                        <ul class="mt-2 space-y-1.5">
-                            @foreach ($stockAlerts->take(3) as $alert)
-                                <li wire:key="dashboard-stock-{{ $alert['product']->id }}" class="flex items-center justify-between gap-2 text-xs text-gray-600">
-                                    <span class="truncate"><b class="font-semibold text-gray-800">{{ $alert['product']->unit_type }}</b> · {{ \App\Support\Plural::count($alert['units'], 'unit') }}</span>
-                                    <x-stock-status-badge :status="$alert['status']" />
-                                </li>
-                            @endforeach
-                        </ul>
-                        @if ($stockAlerts->count() > 3)
-                            <p class="mt-1.5 text-xs text-gray-500">and {{ $stockAlerts->count() - 3 }} more</p>
-                        @endif
-                    @endif
-                </x-dashboard-card>
-
-                <x-dashboard-card title="Leakage review" icon="beaker" :href="route('inventory.overview', ['tab' => 'leakage'])" link-label="Leakage">
-                    @if ($leakageAttentionCount === 0)
-                        <p class="{{ $emptyClasses }}">No open leakage reports need review.</p>
-                    @else
-                        <p class="text-2xl font-extrabold tabular-nums text-gray-900">{{ \App\Support\Plural::count($leakageAttentionCount, 'report') }}</p>
-                        <p class="mt-2 text-xs text-gray-500">Open and flagged Review or Investigate, from manual entries, batch checks, and stock counts.</p>
-                    @endif
-                </x-dashboard-card>
-            @endif
-        </div>
+    @if ($quickActions !== [])
+        <nav aria-label="Quick actions" class="flex flex-wrap gap-2">
+            @foreach ($quickActions as $action)
+                <a wire:key="quick-action-{{ $action['key'] }}" href="{{ $action['url'] }}" @class([
+                    'inline-flex items-center gap-1.5 rounded-md px-3.5 py-2 text-[13px] font-semibold',
+                    'bg-blue-600 text-white hover:bg-blue-700' => $loop->first,
+                    'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50' => ! $loop->first,
+                ])>
+                    <x-dynamic-component :component="'heroicon-o-'.$action['icon']" class="size-4" aria-hidden="true" />
+                    {{ $action['label'] }}
+                </a>
+            @endforeach
+        </nav>
     @endif
 
-    <div class="grid gap-[18px] lg:grid-cols-3">
-        @if ($forecastCover !== null)
-            <x-dashboard-card class="lg:col-span-2" title="Tomorrow's forecast vs stock cover" icon="presentation-chart-line" :href="route('forecasting.index')" link-label="Forecasting">
-                @if (! $forecastCover['enabled'])
-                    <p class="{{ $emptyClasses }}">ML suggestions are turned off in Settings.</p>
-                @elseif ($forecastCover['rows']->isEmpty())
-                    <p class="{{ $emptyClasses }}">No products to forecast yet.</p>
-                @elseif ($forecastCover['rows']->every(fn (array $row): bool => $row['forecast'] === null))
-                    <div class="{{ $emptyClasses }}">
-                        <p>No forecasts for tomorrow yet.</p>
-                        <a href="{{ route('forecasting.index') }}" class="text-xs font-semibold text-blue-700 hover:text-blue-900">See why on the Forecasting page</a>
-                    </div>
-                @else
-                    <div class="-mx-[18px] -my-4 overflow-x-auto">
-                        <table class="w-full min-w-[480px] border-collapse text-left">
-                            <caption class="sr-only">Tomorrow's forecast demand, current stock, and days of cover per SKU.</caption>
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">SKU</th>
-                                    <th scope="col" class="px-[18px] py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Forecast</th>
-                                    <th scope="col" class="px-[18px] py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">In stock</th>
-                                    <th scope="col" class="px-[18px] py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Cover</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach ($forecastCover['rows'] as $row)
-                                    @php($lowCover = $row['coverDays'] !== null && $row['coverDays'] < $coverWarningDays)
-                                    <tr wire:key="dashboard-cover-{{ $row['product']->id }}" class="border-t border-gray-100 text-[13px]">
-                                        <td class="px-[18px] py-2.5"><span class="rounded bg-teal-50 px-2.5 py-[3px] text-[11px] font-bold text-[#0f766e]">{{ $row['product']->unit_type }}</span></td>
-                                        <td class="px-[18px] py-2.5 text-right tabular-nums text-gray-800">{{ $row['forecast'] === null ? 'No forecast' : number_format($row['forecast']) }}</td>
-                                        <td class="px-[18px] py-2.5 text-right tabular-nums text-gray-800">{{ number_format($row['units']) }}</td>
-                                        <td @class(['px-[18px] py-2.5 text-right tabular-nums', 'font-semibold text-amber-700' => $lowCover, 'text-gray-800' => ! $lowCover])>
-                                            @if ($row['coverDays'] === null)
-                                                —
-                                            @else
-                                                <span class="inline-flex items-center gap-1">
-                                                    @if ($lowCover)<x-heroicon-o-exclamation-triangle class="size-4" aria-hidden="true" /><span class="sr-only">Low cover:</span>@endif
-                                                    {{ \App\Support\Plural::count(round($row['coverDays'], 1), 'day') }}
-                                                </span>
-                                            @endif
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                @endif
-            </x-dashboard-card>
-        @endif
+    @if ($customising)
+        <section aria-labelledby="customise-heading" class="rounded-lg border border-blue-200 bg-white shadow-sm">
+            <div class="flex flex-wrap items-start justify-between gap-3 border-b border-gray-100 px-[18px] py-3.5">
+                <div>
+                    <h2 id="customise-heading" class="text-sm font-bold text-gray-900">Customise your dashboard</h2>
+                    <p class="mt-0.5 text-xs text-gray-500">Show, hide and reorder the widgets your role can see.</p>
+                </div>
+                <button type="button" wire:click="resetLayout" class="text-xs font-semibold text-blue-700 hover:text-blue-900">Reset to role default</button>
+            </div>
+            @error('layout')
+                <p role="alert" class="border-b border-red-100 bg-red-50 px-[18px] py-2.5 text-sm text-red-700">{{ $message }}</p>
+            @enderror
+            <ol class="divide-y divide-gray-100">
+                @foreach ($layoutOrder as $key)
+                    @continue(! isset($permittedWidgets[$key]))
+                    @php
+                        $isShown = ! in_array($key, $layoutHidden, true);
+                    @endphp
+                    <li wire:key="customise-{{ $key }}" class="flex items-center gap-3 px-[18px] py-2.5">
+                        <label class="flex min-w-0 flex-1 items-center gap-2.5 text-[13px] font-medium text-gray-800">
+                            <input type="checkbox" wire:click="toggleWidget('{{ $key }}')" @checked($isShown) class="size-4 rounded border-gray-300 text-blue-600">
+                            <span class="truncate">{{ $permittedWidgets[$key]->title }}</span>
+                            @unless ($isShown)
+                                <span class="shrink-0 whitespace-nowrap rounded-full bg-gray-100 px-2 py-0.5 text-[10.5px] font-bold text-gray-500">Hidden</span>
+                            @endunless
+                        </label>
+                        <div class="flex shrink-0 gap-1">
+                            <button type="button" wire:click="moveWidget('{{ $key }}', 'up')" @disabled($loop->first) aria-label="Move {{ $permittedWidgets[$key]->title }} up" class="flex size-7 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40">
+                                <x-heroicon-o-chevron-up class="size-4" aria-hidden="true" />
+                            </button>
+                            <button type="button" wire:click="moveWidget('{{ $key }}', 'down')" @disabled($loop->last) aria-label="Move {{ $permittedWidgets[$key]->title }} down" class="flex size-7 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40">
+                                <x-heroicon-o-chevron-down class="size-4" aria-hidden="true" />
+                            </button>
+                        </div>
+                    </li>
+                @endforeach
+            </ol>
+            <div class="flex justify-end gap-2 border-t border-gray-100 bg-gray-50 px-[18px] py-3">
+                <button type="button" wire:click="cancelCustomising" class="rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="button" wire:click="saveLayout" class="rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700">Save layout</button>
+            </div>
+        </section>
+    @endif
 
-        <x-dashboard-card class="{{ $forecastCover !== null ? 'lg:col-span-1' : 'lg:col-span-3' }}" title="Latest notifications" icon="bell" :href="route('notifications.index')" link-label="All">
-            @if ($notifications->isEmpty())
-                <p class="{{ $emptyClasses }}">You're all caught up. New alerts will appear here.</p>
+    @if ($hasModuleWidgets)
+        <section aria-labelledby="attention-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+            <div class="flex items-center justify-between gap-3 border-b border-gray-100 px-[18px] py-3.5">
+                <h2 id="attention-heading" class="flex items-center gap-2 text-[13px] font-bold text-gray-900">
+                    <x-heroicon-o-bell-alert class="size-5 text-gray-400" aria-hidden="true" />
+                    Needs your attention
+                </h2>
+                @if ($attentionItems !== [])
+                    <span class="text-xs text-gray-500">{{ \App\Support\Plural::count(count($attentionItems), 'item') }}</span>
+                @endif
+            </div>
+            @if ($attentionItems === [])
+                <p class="flex items-center gap-2 px-[18px] py-4 text-sm text-gray-600">
+                    <x-heroicon-o-check-circle class="size-5 text-green-600" aria-hidden="true" />
+                    Nothing needs your attention.
+                </p>
             @else
-                <ul class="-mx-[18px] -my-4 divide-y divide-gray-100">
-                    @foreach ($notifications as $notification)
-                        @php($severity = $notification->data['severity'] ?? 'info')
-                        <li wire:key="dashboard-notification-{{ $notification->id }}">
-                            <a href="{{ \App\Livewire\NotificationBell::safeUrl($notification->data['url'] ?? null) }}" @class(['flex items-start gap-3 px-[18px] py-3 hover:bg-gray-50', 'bg-blue-50/60' => $notification->read_at === null])>
-                                <span aria-hidden="true" @class(['mt-1.5 size-2 shrink-0 rounded-full', $severityDotClasses[$severity] ?? 'bg-blue-500'])></span>
-                                <span class="min-w-0">
-                                    <span class="block truncate text-[13px] font-medium text-gray-900">
-                                        @if ($notification->read_at === null)<span class="sr-only">Unread: </span>@endif{{ $notification->data['title'] ?? 'Notification' }}
-                                    </span>
-                                    <span class="mt-0.5 block text-[11px] text-gray-400">{{ $notification->created_at?->diffForHumans() }}</span>
+                <ul class="divide-y divide-gray-100">
+                    @foreach ($attentionItems as $item)
+                        @php
+                            $severity = $severityPresentation[$item['severity']];
+                        @endphp
+                        <li wire:key="attention-{{ $item['key'] }}">
+                            <a href="{{ $item['url'] }}" class="relative flex items-center gap-3 py-3 pl-[22px] pr-[18px] hover:bg-gray-50">
+                                <span aria-hidden="true" @class(['absolute inset-y-2 left-0 w-1 rounded-r', $severity['rail']])></span>
+                                <span @class(['inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-bold', $severity['class']])>
+                                    <x-dynamic-component :component="'heroicon-o-'.$severity['icon']" class="size-3.5" aria-hidden="true" />
+                                    {{ $severity['label'] }}
                                 </span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="block truncate text-[13px] font-semibold text-gray-900">{{ $item['title'] }}</span>
+                                    <span class="block truncate text-xs text-gray-500">{{ $item['detail'] }}</span>
+                                </span>
+                                <x-heroicon-o-chevron-right class="size-4 shrink-0 text-gray-400" aria-hidden="true" />
                             </a>
                         </li>
                     @endforeach
                 </ul>
             @endif
-        </x-dashboard-card>
-    </div>
+        </section>
+    @else
+        <section aria-labelledby="getting-started-heading" class="rounded-lg border border-gray-200 bg-white p-[18px] shadow-sm">
+            <h2 id="getting-started-heading" class="flex items-center gap-2 text-[13px] font-bold text-gray-900">
+                <x-heroicon-o-lifebuoy class="size-5 text-gray-400" aria-hidden="true" />
+                Need something from another team?
+            </h2>
+            <p class="mt-2 text-sm text-gray-600">
+                Your role covers your own team's work, so most of AquaOps is managed by other departments. Your notifications and requests appear below.
+                For a one-off need, such as a stock check, a production run or an order, send that team a request. If you need to work in another area regularly, ask for access.
+            </p>
+            @if (app(\App\Services\Requests\RequestAccess::class)->canSendRequests($user))
+                <button type="button" wire:click="$dispatch('open-request-modal')" class="mt-3 inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700">
+                    <x-heroicon-o-paper-airplane class="size-4" aria-hidden="true" />
+                    Send a request
+                </button>
+            @endif
+            @if ($requestableModules->isNotEmpty())
+                <ul class="mt-4 grid gap-3 sm:grid-cols-3">
+                    @foreach ($requestableModules as $module)
+                        <li wire:key="request-access-{{ $module->slug }}" class="flex flex-col rounded-md border border-gray-200 p-3">
+                            <span class="text-[13px] font-semibold text-gray-900">{{ $module->name }}</span>
+                            <span class="mt-0.5 flex-1 text-xs text-gray-500">{{ $module->description }}</span>
+                            <form method="POST" action="{{ route('access-requests.store') }}" class="mt-3">
+                                @csrf
+                                <input type="hidden" name="module" value="{{ $module->slug }}">
+                                <button type="submit" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50">
+                                    <x-heroicon-o-key class="size-3.5" aria-hidden="true" />
+                                    Ask for access
+                                </button>
+                            </form>
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+        </section>
+    @endif
 
-    @unless ($hasModuleCards)
+    @if ($widgets === [])
         <p role="status" class="rounded-md border border-gray-200 bg-white px-4 py-3 text-sm text-gray-600">
-            Your role doesn't include production, inventory, or forecasting yet, so there is nothing else to summarise here. Ask an administrator if you need access.
+            All your widgets are hidden. Select Customise to show them again.
         </p>
-    @endunless
+    @else
+        <div class="grid gap-[18px] sm:grid-cols-2 xl:grid-cols-4">
+            @foreach ($widgets as $widget)
+                <div wire:key="widget-slot-{{ $widget->key }}" @class(['min-w-0', 'sm:col-span-2' => $widget->isWide()])>
+                    @livewire($widget->component, [], key('widget-'.$widget->key))
+                </div>
+            @endforeach
+        </div>
+    @endif
 </div>

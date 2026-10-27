@@ -25,3 +25,4 @@ Schedule::command('sales:close-day', [CarbonImmutable::now($operationsTimezone)-
     ->timezone($operationsTimezone);
 Schedule::command('forecasts:generate')->dailyAt('18:00')->timezone($operationsTimezone);
 Schedule::command('invoices:notify-overdue')->dailyAt('08:00')->timezone($operationsTimezone);
+Schedule::command('requests:notify-overdue')->dailyAt('08:05')->timezone($operationsTimezone);

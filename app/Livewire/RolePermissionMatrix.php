@@ -7,6 +7,7 @@ use App\Models\Module;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\ModuleAccess;
+use App\Support\Plural;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Collection;
@@ -33,6 +34,15 @@ class RolePermissionMatrix extends Component
     public bool $showDeleteRoleModal = false;
 
     public ?string $deleteRoleError = null;
+
+    /**
+     * Staged access levels keyed by "{roleId}-{moduleId}", saved together by savePermissions().
+     *
+     * @var array<string, string>
+     */
+    public array $pendingPermissions = [];
+
+    public bool $showSaveConfirmation = false;
 
     #[Locked]
     public ?int $editingRoleId = null;
@@ -112,14 +122,16 @@ class RolePermissionMatrix extends Component
                 'slug' => $this->uniqueSlug($validated['name']),
                 'description' => $validated['description'] ?? null,
             ]);
+            // Every role may send and receive requests; everything else starts closed.
             $permissions = Module::query()
                 ->orderBy('id')
-                ->pluck('id')
-                ->map(fn (int $moduleId): array => [
+                ->pluck('slug', 'id')
+                ->map(fn (string $slug, int $moduleId): array => [
                     'role_id' => $newRole->id,
                     'module_id' => $moduleId,
-                    'access_level' => 'none',
+                    'access_level' => $slug === 'requests' ? 'full' : 'none',
                 ])
+                ->values()
                 ->all();
 
             if ($permissions !== []) {
@@ -255,24 +267,203 @@ class RolePermissionMatrix extends Component
         return $role === null ? null : route('staff.directory', ['role' => $role->getKey()]);
     }
 
-    public function cyclePermission(int $roleId, int $moduleId): void
+    /**
+     * Stage an access level for one role/module cell. Nothing is persisted until savePermissions().
+     */
+    public function setPermission(int $roleId, int $moduleId, string $accessLevel): void
+    {
+        $this->authorizeRoleManagement();
+
+        $storedAccessLevel = $this->validatedStoredAccessLevel($roleId, $moduleId, $accessLevel);
+        $cellKey = $this->permissionKey($roleId, $moduleId);
+
+        if ($accessLevel === $storedAccessLevel) {
+            unset($this->pendingPermissions[$cellKey]);
+
+            return;
+        }
+
+        $this->pendingPermissions[$cellKey] = $accessLevel;
+    }
+
+    public function discardPermissionChanges(): void
+    {
+        $this->pendingPermissions = [];
+        $this->showSaveConfirmation = false;
+    }
+
+    public function openSaveConfirmation(): void
+    {
+        $this->authorizeRoleManagement();
+
+        if ($this->pendingPermissions === []) {
+            return;
+        }
+
+        $this->showSaveConfirmation = true;
+    }
+
+    public function closeSaveConfirmation(): void
+    {
+        $this->showSaveConfirmation = false;
+    }
+
+    public function savePermissions(): void
+    {
+        $this->authorizeRoleManagement();
+
+        $changes = collect($this->pendingPermissions)
+            ->map(function (mixed $accessLevel, int|string $cellKey): array {
+                [$roleId, $moduleId] = $this->parsePermissionKey((string) $cellKey);
+
+                return ['role_id' => $roleId, 'module_id' => $moduleId, 'access_level' => (string) $accessLevel];
+            })
+            ->values();
+
+        foreach ($changes as $change) {
+            $this->validatedStoredAccessLevel($change['role_id'], $change['module_id'], $change['access_level']);
+        }
+
+        $savedCount = DB::transaction(function () use ($changes): int {
+            $savedCount = 0;
+
+            foreach ($changes as $change) {
+                $storedAccessLevel = $this->validatedStoredAccessLevel(
+                    $change['role_id'],
+                    $change['module_id'],
+                    $change['access_level'],
+                    lockForUpdate: true,
+                );
+
+                if ($storedAccessLevel === $change['access_level']) {
+                    continue;
+                }
+
+                $updatedRows = DB::table('role_module_permissions')
+                    ->where('role_id', $change['role_id'])
+                    ->where('module_id', $change['module_id'])
+                    ->update(['access_level' => $change['access_level']]);
+
+                if ($updatedRows !== 1) {
+                    throw new \RuntimeException('The existing role/module permission could not be updated.');
+                }
+
+                $savedCount++;
+            }
+
+            return $savedCount;
+        });
+
+        $this->pendingPermissions = [];
+        $this->showSaveConfirmation = false;
+        $this->dispatch('permissions-saved', message: Plural::count($savedCount, 'permission change').' saved.');
+    }
+
+    public function render(): View
     {
         $user = auth()->user();
 
         abort_unless($user instanceof User, 403);
-        app(ModuleAccess::class)->authorize($user, 'users-roles', write: true);
+        app(ModuleAccess::class)->authorize($user, 'users-roles');
 
+        $modules = Module::query()->orderBy('name')->get();
+        $roles = Role::query()
+            ->withCount([
+                'users',
+                'modules as accessible_modules_count' => fn ($query) => $query->where('role_module_permissions.access_level', '!=', 'none'),
+            ])
+            ->orderBy('name')
+            ->get();
+        $storedPermissions = DB::table('role_module_permissions')
+            ->get(['role_id', 'module_id', 'access_level'])
+            ->mapWithKeys(fn (object $permission): array => [
+                $this->permissionKey((int) $permission->role_id, (int) $permission->module_id) => $permission->access_level,
+            ])
+            ->all();
+        $accessPresentation = [
+            'none' => ['label' => 'None', 'description' => 'No access', 'icon' => 'no-symbol'],
+            'view' => ['label' => 'View', 'description' => 'Can view only', 'icon' => 'eye'],
+            'full' => ['label' => 'Full', 'description' => 'Can view and change', 'icon' => 'pencil-square'],
+        ];
+
+        return view('livewire.role-permission-matrix', [
+            'modules' => $modules,
+            'roles' => $roles,
+            'storedPermissions' => $storedPermissions,
+            'accessLevels' => self::ACCESS_LEVELS,
+            'pendingChangeSummary' => $this->pendingChangeSummary($roles, $modules, $storedPermissions, $accessPresentation),
+            'deletingRole' => $deletingRole = $this->deleteRolePreview($this->deletingRoleId),
+            'deletingRoleUsers' => $this->deleteRolePreviewUsers($deletingRole),
+            'deletingRoleUsersUrl' => $this->deleteRoleUsersUrl($deletingRole),
+            'canManageRoles' => app(ModuleAccess::class)->can($user, 'users-roles', write: true),
+            'rolePresentation' => [
+                'administrator' => ['label' => 'Admin', 'class' => 'bg-red-50 text-[#b91c1c]'],
+                'production-manager' => ['label' => 'Prod. Mgr', 'class' => 'bg-blue-50 text-[#1d4ed8]'],
+                'production-staff' => ['label' => 'Prod. Staff', 'class' => 'bg-teal-50 text-[#0f766e]'],
+                'inventory-staff' => ['label' => 'Inventory', 'class' => 'bg-amber-100 text-[#92400e]'],
+                'maintenance-staff' => ['label' => 'Maintenance', 'class' => 'bg-purple-100 text-[#7e22ce]'],
+            ],
+            'accessPresentation' => $accessPresentation,
+        ]);
+    }
+
+    /**
+     * Human-readable list of staged changes for the save confirmation.
+     *
+     * @param  Collection<int, Role>  $roles
+     * @param  Collection<int, Module>  $modules
+     * @param  array<string, string>  $storedPermissions
+     * @param  array<string, array{label: string, description: string, icon: string}>  $accessPresentation
+     * @return list<array{role: string, module: string, from: string, to: string}>
+     */
+    private function pendingChangeSummary(Collection $roles, Collection $modules, array $storedPermissions, array $accessPresentation): array
+    {
+        $rolesById = $roles->keyBy('id');
+        $modulesById = $modules->keyBy('id');
+        $summary = [];
+
+        foreach ($this->pendingPermissions as $cellKey => $accessLevel) {
+            if (preg_match('/^(\d+)-(\d+)$/', (string) $cellKey, $matches) !== 1) {
+                continue;
+            }
+
+            $role = $rolesById->get((int) $matches[1]);
+            $module = $modulesById->get((int) $matches[2]);
+
+            if ($role === null || $module === null || ! isset($accessPresentation[$accessLevel])) {
+                continue;
+            }
+
+            $summary[] = [
+                'role' => $role->name,
+                'module' => $module->name,
+                'from' => $accessPresentation[$storedPermissions[$cellKey] ?? 'none']['label'],
+                'to' => $accessPresentation[$accessLevel]['label'],
+            ];
+        }
+
+        return $summary;
+    }
+
+    /**
+     * Validate a requested cell change and return the access level currently stored for it.
+     */
+    private function validatedStoredAccessLevel(int $roleId, int $moduleId, string $accessLevel, bool $lockForUpdate = false): string
+    {
         Validator::make([
             'role_id' => $roleId,
             'module_id' => $moduleId,
+            'access_level' => $accessLevel,
         ], [
             'role_id' => ['required', 'integer', Rule::exists('roles', 'id')],
             'module_id' => ['required', 'integer', Rule::exists('modules', 'id')],
+            'access_level' => ['required', Rule::in(self::ACCESS_LEVELS)],
         ])->validate();
 
         $permission = DB::table('role_module_permissions')
             ->where('role_id', $roleId)
             ->where('module_id', $moduleId)
+            ->when($lockForUpdate, fn ($query) => $query->lockForUpdate())
             ->first();
 
         if ($permission === null) {
@@ -285,54 +476,30 @@ class RolePermissionMatrix extends Component
             throw new \UnexpectedValueException('The stored permission access level is invalid.');
         }
 
-        $nextIndex = ($currentIndex + 1) % count(self::ACCESS_LEVELS);
         $role = Role::query()->findOrFail($roleId);
 
         abort_if(
-            $role->slug === 'administrator' && $nextIndex < $currentIndex,
+            $role->slug === 'administrator' && array_search($accessLevel, self::ACCESS_LEVELS, true) < $currentIndex,
             403,
             'Administrator permissions cannot be reduced.',
         );
 
-        $updatedRows = DB::table('role_module_permissions')
-            ->where('role_id', $roleId)
-            ->where('module_id', $moduleId)
-            ->update([
-                'access_level' => self::ACCESS_LEVELS[$nextIndex],
-            ]);
-
-        if ($updatedRows !== 1) {
-            throw new \RuntimeException('The existing role/module permission could not be updated.');
-        }
+        return $permission->access_level;
     }
 
-    public function render(): View
+    private function permissionKey(int $roleId, int $moduleId): string
     {
-        $user = auth()->user();
+        return "{$roleId}-{$moduleId}";
+    }
 
-        abort_unless($user instanceof User, 403);
-        app(ModuleAccess::class)->authorize($user, 'users-roles');
+    /**
+     * @return array{0: int, 1: int}
+     */
+    private function parsePermissionKey(string $cellKey): array
+    {
+        abort_unless(preg_match('/^(\d+)-(\d+)$/', $cellKey, $matches) === 1, 422, 'Invalid permission change.');
 
-        return view('livewire.role-permission-matrix', [
-            'modules' => Module::query()->with('roles')->orderBy('name')->get(),
-            'roles' => Role::query()->orderBy('name')->get(),
-            'deletingRole' => $deletingRole = $this->deleteRolePreview($this->deletingRoleId),
-            'deletingRoleUsers' => $this->deleteRolePreviewUsers($deletingRole),
-            'deletingRoleUsersUrl' => $this->deleteRoleUsersUrl($deletingRole),
-            'canManageRoles' => app(ModuleAccess::class)->can($user, 'users-roles', write: true),
-            'rolePresentation' => [
-                'administrator' => ['label' => 'Admin', 'class' => 'bg-red-50 text-[#b91c1c]'],
-                'production-manager' => ['label' => 'Prod. Mgr', 'class' => 'bg-blue-50 text-[#1d4ed8]'],
-                'production-staff' => ['label' => 'Prod. Staff', 'class' => 'bg-teal-50 text-[#0f766e]'],
-                'inventory-staff' => ['label' => 'Inventory', 'class' => 'bg-amber-100 text-[#92400e]'],
-                'maintenance-staff' => ['label' => 'Maintenance', 'class' => 'bg-purple-100 text-[#7e22ce]'],
-            ],
-            'accessPresentation' => [
-                'none' => ['label' => 'No access', 'class' => 'bg-gray-200'],
-                'view' => ['label' => 'View only', 'class' => 'bg-amber-500'],
-                'full' => ['label' => 'Full access', 'class' => 'bg-blue-600'],
-            ],
-        ]);
+        return [(int) $matches[1], (int) $matches[2]];
     }
 
     private function authorizeRoleManagement(): User

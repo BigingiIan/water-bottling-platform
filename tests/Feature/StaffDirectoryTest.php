@@ -3,12 +3,15 @@
 namespace Tests\Feature;
 
 use App\Livewire\StaffDirectory;
+use App\Models\AuditLog;
+use App\Models\Module;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\ModuleSeeder;
 use Database\Seeders\RoleModulePermissionSeeder;
 use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 use Tests\TestCase;
 
@@ -65,6 +68,92 @@ class StaffDirectoryTest extends TestCase
             ->set('search', 'john@example.test')
             ->assertSee($admin->name)
             ->assertDontSee($suspended->name);
+    }
+
+    public function test_empty_filter_results_offer_to_clear_every_filter(): void
+    {
+        $productionStaff = Role::query()->where('slug', 'production-staff')->firstOrFail();
+        $member = User::factory()->create(['name' => 'Peter Otieno', 'role_id' => $productionStaff->id]);
+
+        Livewire::test(StaffDirectory::class)
+            ->set('search', 'nobody-matches-this')
+            ->set('statusFilter', 'suspended')
+            ->set('moduleFilter', 'equipment')
+            ->assertSee('No staff match these filters.')
+            ->assertSee('Clear filters')
+            ->assertDontSee($member->name)
+            ->call('clearFilters')
+            ->assertSet('search', '')
+            ->assertSet('roleFilter', '')
+            ->assertSet('statusFilter', '')
+            ->assertSet('moduleFilter', '')
+            ->assertSee($member->name)
+            ->assertDontSee('Clear filters');
+    }
+
+    public function test_detail_panel_shows_role_status_last_active_and_recent_activity(): void
+    {
+        $this->travelTo('2026-10-22 09:00:00');
+        $productionStaff = Role::query()->where('slug', 'production-staff')->firstOrFail();
+        $member = User::factory()->create([
+            'name' => 'Peter Otieno',
+            'role_id' => $productionStaff->id,
+            'status' => 'active',
+            'last_active_at' => now()->subHours(3),
+        ]);
+        $bystander = User::factory()->create(['name' => 'Grace Wambui', 'role_id' => $productionStaff->id]);
+        AuditLog::query()->create(['user_id' => $member->id, 'action' => 'profile.password_changed', 'table_name' => 'users']);
+        AuditLog::query()->create(['user_id' => auth()->id(), 'target_user_id' => $member->id, 'action' => 'user.role_changed', 'table_name' => 'users']);
+        AuditLog::query()->create(['user_id' => $bystander->id, 'action' => 'profile.name_changed', 'table_name' => 'users']);
+
+        Livewire::test(StaffDirectory::class)
+            ->assertDontSeeHtml('aria-labelledby="staff-panel-heading"')
+            ->call('openUser', $member->id)
+            ->assertSet('selectedUserId', $member->id)
+            ->assertSeeHtml('aria-labelledby="staff-panel-heading"')
+            ->assertSee('Production Staff')
+            ->assertSee('Active')
+            ->assertSee('3 hours ago')
+            ->assertSee('Profile Password Changed')
+            ->assertSee('User Role Changed')
+            ->assertDontSee('Profile Name Changed')
+            ->assertSee('Change role')
+            ->call('closeUser')
+            ->assertSet('selectedUserId', null)
+            ->assertDontSeeHtml('aria-labelledby="staff-panel-heading"');
+    }
+
+    public function test_detail_panel_opens_from_the_url_and_ignores_unknown_users(): void
+    {
+        $productionStaff = Role::query()->where('slug', 'production-staff')->firstOrFail();
+        $member = User::factory()->create(['name' => 'Peter Otieno', 'role_id' => $productionStaff->id]);
+
+        Livewire::withQueryParams(['user' => $member->id])
+            ->test(StaffDirectory::class)
+            ->assertSeeHtml('id="staff-panel-heading"');
+
+        Livewire::test(StaffDirectory::class)
+            ->call('openUser', 999999)
+            ->assertSet('selectedUserId', null);
+    }
+
+    public function test_view_only_users_can_open_the_panel_but_see_no_actions(): void
+    {
+        $productionManager = Role::query()->where('slug', 'production-manager')->firstOrFail();
+        DB::table('role_module_permissions')
+            ->where('role_id', $productionManager->id)
+            ->where('module_id', Module::query()->where('slug', 'users-roles')->value('id'))
+            ->update(['access_level' => 'view']);
+        $viewer = User::factory()->create(['role_id' => $productionManager->id]);
+        $this->actingAs($viewer);
+
+        Livewire::test(StaffDirectory::class)
+            ->assertSeeHtml('aria-label="View details for '.e($viewer->name).'"')
+            ->assertDontSeeHtml('aria-label="Actions for')
+            ->call('openUser', $viewer->id)
+            ->assertSeeHtml('id="staff-panel-heading"')
+            ->assertDontSee('Change role')
+            ->assertDontSee('Reset password');
     }
 
     public function test_directory_filters_users_by_accessible_module(): void

@@ -2,115 +2,136 @@
 
 namespace App\Livewire;
 
-use App\Models\LeakageReport;
-use App\Models\Product;
-use App\Models\ProductionSchedule;
+use App\Models\Module;
 use App\Models\User;
-use App\Services\Forecasting\ForecastOverview;
-use App\Services\Inventory\StockService;
-use App\Services\SettingsService;
+use App\Services\Dashboard\AttentionItems;
+use App\Support\Dashboard\DashboardQuickActions;
+use App\Support\Dashboard\DashboardWidget;
+use App\Support\Dashboard\DashboardWidgetRegistry;
 use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
 #[Layout('components.app-layout', ['title' => 'Dashboard', 'breadcrumbSection' => 'Home', 'activeItem' => 'Dashboard'])]
 class Dashboard extends Component
 {
-    private const LATEST_NOTIFICATIONS = 5;
+    /**
+     * Modules a near-empty role is offered to request access to.
+     */
+    private const REQUESTABLE_MODULES = ['production', 'inventory', 'orders'];
 
-    public function render(ModuleAccess $access): View
+    public bool $customising = false;
+
+    /**
+     * Draft widget order while customising.
+     *
+     * @var list<string>
+     */
+    public array $layoutOrder = [];
+
+    /**
+     * Draft hidden widget keys while customising.
+     *
+     * @var list<string>
+     */
+    public array $layoutHidden = [];
+
+    public function startCustomising(DashboardWidgetRegistry $registry): void
+    {
+        $user = $this->authorizeDashboard();
+        $layout = $registry->layoutFor($user);
+
+        $this->layoutOrder = array_map(fn (array $entry): string => $entry['widget']->key, $layout);
+        $this->layoutHidden = array_values(array_map(
+            fn (array $entry): string => $entry['widget']->key,
+            array_filter($layout, fn (array $entry): bool => ! $entry['visible']),
+        ));
+        $this->resetValidation();
+        $this->customising = true;
+    }
+
+    public function moveWidget(string $key, string $direction): void
+    {
+        $index = array_search($key, $this->layoutOrder, true);
+        $targetIndex = $direction === 'up' ? $index - 1 : $index + 1;
+
+        if ($index === false || ! isset($this->layoutOrder[$targetIndex])) {
+            return;
+        }
+
+        [$this->layoutOrder[$index], $this->layoutOrder[$targetIndex]] = [$this->layoutOrder[$targetIndex], $this->layoutOrder[$index]];
+    }
+
+    public function toggleWidget(string $key): void
+    {
+        if (! in_array($key, $this->layoutOrder, true)) {
+            return;
+        }
+
+        $this->layoutHidden = in_array($key, $this->layoutHidden, true)
+            ? array_values(array_diff($this->layoutHidden, [$key]))
+            : [...$this->layoutHidden, $key];
+    }
+
+    public function saveLayout(DashboardWidgetRegistry $registry): void
+    {
+        $user = $this->authorizeDashboard();
+
+        $registry->saveLayout(
+            $user,
+            array_values(array_filter($this->layoutOrder, 'is_string')),
+            array_values(array_filter($this->layoutHidden, 'is_string')),
+        );
+
+        $this->customising = false;
+    }
+
+    public function resetLayout(DashboardWidgetRegistry $registry): void
+    {
+        $registry->resetLayout($this->authorizeDashboard());
+        $this->customising = false;
+    }
+
+    public function cancelCustomising(): void
+    {
+        $this->resetValidation();
+        $this->customising = false;
+    }
+
+    public function render(DashboardWidgetRegistry $registry, AttentionItems $attentionItems, DashboardQuickActions $quickActions): View
+    {
+        $user = $this->authorizeDashboard();
+        $permittedWidgets = $registry->permittedFor($user);
+        $hasModuleWidgets = collect($permittedWidgets)->contains(fn (DashboardWidget $widget): bool => $widget->summarisesModule());
+        $accessLevels = $registry->accessLevels($user);
+
+        return view('livewire.dashboard', [
+            'user' => $user,
+            'widgets' => $registry->visibleFor($user),
+            'permittedWidgets' => $permittedWidgets,
+            'attentionItems' => $hasModuleWidgets ? $attentionItems->for($user) : [],
+            'quickActions' => $quickActions->for($user),
+            'hasModuleWidgets' => $hasModuleWidgets,
+            'requestableModules' => $hasModuleWidgets
+                ? collect()
+                : Module::query()
+                    ->whereIn('slug', array_filter(
+                        self::REQUESTABLE_MODULES,
+                        fn (string $slug): bool => ! in_array($accessLevels[$slug] ?? 'none', ['view', 'full'], true),
+                    ))
+                    ->orderBy('name')
+                    ->get(['slug', 'name', 'description']),
+        ]);
+    }
+
+    private function authorizeDashboard(): User
     {
         $user = auth()->user();
 
         abort_unless($user instanceof User, 403);
-        $access->authorize($user, 'dashboard');
+        app(ModuleAccess::class)->authorize($user, 'dashboard');
 
-        $canViewProduction = $access->can($user, 'production');
-        $canViewInventory = $access->can($user, 'inventory');
-        $canViewForecasting = $access->can($user, 'forecasting');
-
-        return view('livewire.dashboard', [
-            'user' => $user,
-            'production' => $canViewProduction ? $this->productionSummary() : null,
-            'canCreateSchedule' => $access->can($user, 'production', write: true),
-            'stockAlerts' => $canViewInventory ? $this->stockAlerts() : null,
-            'leakageAttentionCount' => $canViewInventory ? $this->leakageAttentionCount() : null,
-            'forecastCover' => $canViewForecasting ? $this->forecastCover() : null,
-            'notifications' => $user->notifications()->latest()->limit(self::LATEST_NOTIFICATIONS)->get(),
-        ]);
-    }
-
-    /**
-     * @return array{target: int, actual: int, percent: int, scheduledRuns: int, openRuns: Collection<int, ProductionSchedule>}
-     */
-    private function productionSummary(): array
-    {
-        $schedules = ProductionSchedule::query()
-            ->with('productionLine:id,name')
-            ->withSum('logs', 'units_logged')
-            ->whereDate('scheduled_date', today()->toDateString())
-            ->orderBy('scheduled_time')
-            ->get();
-        $target = (int) $schedules->sum('target_units');
-        $actual = (int) $schedules->sum('logs_sum_units_logged');
-
-        return [
-            'target' => $target,
-            'actual' => $actual,
-            'percent' => $target > 0 ? (int) round($actual / $target * 100) : 0,
-            'scheduledRuns' => $schedules->count(),
-            'openRuns' => $schedules->whereIn('status', ['active', 'queued'])->values(),
-        ];
-    }
-
-    /**
-     * @return Collection<int, array{product: Product, status: string, units: float}>
-     */
-    private function stockAlerts(): Collection
-    {
-        $stockService = app(StockService::class);
-        $totals = DB::table('warehouse_stock')
-            ->groupBy('product_id')
-            ->selectRaw('product_id, SUM(current_level) as total_units')
-            ->pluck('total_units', 'product_id');
-
-        return Product::query()
-            ->orderBy('unit_type')
-            ->get(['id', 'name', 'unit_type', 'reorder_threshold'])
-            ->map(fn (Product $product): array => [
-                'product' => $product,
-                'units' => $units = (float) ($totals[$product->id] ?? 0),
-                'status' => $stockService->statusForProduct($product, $units),
-            ])
-            ->filter(fn (array $alert): bool => $alert['status'] !== 'ok')
-            ->sortBy(fn (array $alert): int => match ($alert['status']) {
-                'out' => 0,
-                'critical' => 1,
-                default => 2,
-            })
-            ->values();
-    }
-
-    /**
-     * Open leakage reports graded review or investigate, from any source.
-     */
-    private function leakageAttentionCount(): int
-    {
-        return LeakageReport::query()->where('status', 'open')->whereNotNull('severity')->count();
-    }
-
-    /**
-     * @return array{enabled: bool, rows: Collection<int, array{product: Product, forecast: ?float, units: float, coverDays: ?float}>}
-     */
-    private function forecastCover(): array
-    {
-        if (! app(SettingsService::class)->get('forecast.enabled', true)) {
-            return ['enabled' => false, 'rows' => collect()];
-        }
-
-        return ['enabled' => true, 'rows' => app(ForecastOverview::class)->tomorrowCover()];
+        return $user;
     }
 }

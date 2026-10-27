@@ -95,7 +95,12 @@ class DashboardTest extends TestCase
 
         Livewire::test(Dashboard::class)
             ->assertSee('Pump service due')
-            ->assertSee("Your role doesn't include production, inventory, or forecasting yet", false)
+            ->assertSee('Need something from another team?')
+            ->assertSee('Ask for access')
+            ->assertSeeHtml('name="module" value="inventory"')
+            ->assertSeeHtml('name="module" value="production"')
+            ->assertSeeHtml('name="module" value="orders"')
+            ->assertDontSee('Needs your attention')
             ->assertDontSee('Stock alerts')
             ->assertDontSee("Today's output");
     }
@@ -229,6 +234,8 @@ class DashboardTest extends TestCase
 
     private function countQueries(callable $callback): int
     {
+        // Dashboard figures are memoised per request; each count starts like a fresh request.
+        $this->app->forgetScopedInstances();
         DB::flushQueryLog();
         DB::enableQueryLog();
         $callback();
