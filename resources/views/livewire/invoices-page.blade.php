@@ -6,7 +6,7 @@
 @endphp
 
 <div class="flex flex-col gap-6">
-    <x-page-header title="Invoices" subtitle="Internal invoices raised from dispatched orders, and the payments against them." />
+    <x-page-header help="invoicing" title="Invoices" subtitle="Internal invoices raised from dispatched orders, and the payments against them." />
 
     <dl class="grid gap-3.5 sm:grid-cols-3">
         @foreach ([
@@ -76,7 +76,7 @@
                             <td class="border-b border-gray-100 px-[18px] py-3"><x-invoice-status-badge :invoice="$invoice" /></td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="px-[18px] py-10 text-center text-sm text-gray-500">No invoices match these filters. Invoices are created from dispatched orders.</td></tr>
+                        <tr><td colspan="7"><x-empty-state key="invoices" icon="document-text" :filtered="$statusFilter !== '' || $customerFilter !== '' || $dateFrom !== '' || $dateTo !== '' || $overdueOnly" :can="app(\App\Support\ModuleAccess::class)->can(auth()->user(), 'orders')" :action-href="route('orders.index')" /></td></tr>
                     @endforelse
                 </tbody>
             </table>

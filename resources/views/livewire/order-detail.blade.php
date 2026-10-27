@@ -22,7 +22,7 @@
         <span x-text="toastMessage"></span>
     </div>
 
-    <x-page-header :title="$order->order_number" :subtitle="$order->customer->name.' · ordered '.$settingsDate->formatDate($order->order_date).($order->requested_date ? ' · requested for '.$settingsDate->formatDate($order->requested_date) : '')">
+    <x-page-header help="orders" :title="$order->order_number" :subtitle="$order->customer->name.' · ordered '.$settingsDate->formatDate($order->order_date).($order->requested_date ? ' · requested for '.$settingsDate->formatDate($order->requested_date) : '')">
         <x-slot:actions>
             <x-order-status-badge :status="$order->status" class="mr-1" />
             <a href="{{ route('orders.index') }}" class="{{ $secondaryButton }}"><x-heroicon-o-arrow-left class="size-4" aria-hidden="true" />All orders</a>

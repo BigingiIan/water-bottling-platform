@@ -7,7 +7,7 @@
         <p role="status" class="rounded-md border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-800">{{ session('inventorySuccess') }}</p>
     @endif
 
-    <x-page-header title="Inventory" subtitle="Production, leakage, and stock activity.">
+    <x-page-header help="inventory" title="Inventory" subtitle="Production, leakage, and stock activity.">
         @if ($canWriteInventory && $activeTab === 'stock')
             <x-slot:actions>
                 <button type="button" wire:click="openStockCountModal" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
@@ -181,7 +181,7 @@
                             @endif
                         </tr>
                     @empty
-                        <tr><td colspan="{{ $hasStockActions ? 7 : 6 }}" class="px-4 py-8 text-center text-sm text-gray-500">No stock lines match these filters.</td></tr>
+                        <tr><td colspan="{{ $hasStockActions ? 7 : 6 }}"><x-empty-state key="stock_lines" icon="archive-box" :filtered="$productFilter !== '' || $locationFilter !== '' || $statusFilter !== ''" :can="$canWriteInventory" action-click="openStockInModal" /></td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -307,7 +307,7 @@
                                 @endif
                             </tr>
                         @empty
-                            <tr><td colspan="{{ $canSendRequests ? 7 : 6 }}" class="px-4 py-8 text-center text-sm text-gray-500">No batches match these filters.</td></tr>
+                            <tr><td colspan="{{ $canSendRequests ? 7 : 6 }}"><x-empty-state key="batches" icon="cube" :filtered="$batchStatus !== ''" /></td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -453,7 +453,7 @@
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="8" class="px-4 py-8 text-center text-sm text-gray-500">No leakage reports match these filters.</td></tr>
+                            <tr><td colspan="8"><x-empty-state key="leakage" icon="beaker" :filtered="$leakageFlagFilter !== '' || $leakageSourceFilter !== '' || $leakageStatusFilter !== ''" /></td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -538,7 +538,7 @@
                                 <td class="px-[18px] py-3">{{ $movement->user?->name ?? 'System' }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No movements match these filters.</td></tr>
+                            <tr><td colspan="7"><x-empty-state key="movements" icon="arrows-right-left" :filtered="$movementTypeFilter !== '' || $movementProductFilter !== ''" /></td></tr>
                         @endforelse
                     </tbody>
                 </table>

@@ -6,7 +6,7 @@
 @endphp
 
 <div class="flex flex-col gap-6">
-    <x-page-header heading-id="requests-heading" title="Requests" subtitle="Ask another team to act, and follow up on what was asked of yours.">
+    <x-page-header help="requests" heading-id="requests-heading" title="Requests" subtitle="Ask another team to act, and follow up on what was asked of yours.">
         @if ($canSend)
             <x-slot:actions>
                 <button type="button" wire:click="$dispatch('open-request-modal')" class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700">

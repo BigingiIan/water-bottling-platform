@@ -1,5 +1,5 @@
 <div>
-    <x-page-header
+    <x-page-header help="production"
         class="mb-6"
         title="Production Runs"
         :subtitle="'Open runs for '.app(\App\Support\SettingsDate::class)->formatDate($this->selectedDate).' · '.number_format($totalActual).' / '.number_format($totalTarget).' units logged'"
@@ -121,7 +121,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="8" class="px-[18px] py-8 text-center text-sm text-gray-500">No open runs for this date and filters.</td>
+                            <td colspan="8"><x-empty-state key="production_runs" icon="play-circle" :filtered="$lineFilter !== ''" :can="$canLog" :action-href="route('production.schedule')" /></td>
                         </tr>
                     @endforelse
                 </tbody>

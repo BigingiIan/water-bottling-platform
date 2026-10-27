@@ -8,7 +8,7 @@
 @endphp
 
 <div class="flex flex-col gap-6">
-    <x-page-header
+    <x-page-header help="dashboard"
         heading-id="dashboard-heading"
         :title="'Welcome back, '.$user->name"
         :subtitle="($user->role?->name ?? 'Staff').' · '.$settingsDate->formatInstantDate(now())"

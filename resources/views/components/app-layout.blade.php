@@ -21,8 +21,8 @@
         [
             'label' => null,
             'items' => [
-                ['label' => 'Dashboard', 'module' => 'dashboard', 'alwaysVisible' => true, 'icon' => 'squares-2x2', 'href' => route('dashboard')],
-                ['label' => 'Requests', 'module' => 'requests', 'icon' => 'inbox-arrow-down', 'href' => route('requests.index'), 'badge' => $openRequestCount],
+                ['label' => 'Dashboard', 'module' => 'dashboard', 'alwaysVisible' => true, 'icon' => 'squares-2x2', 'href' => route('dashboard'), 'tour' => 'nav-dashboard'],
+                ['label' => 'Requests', 'module' => 'requests', 'icon' => 'inbox-arrow-down', 'href' => route('requests.index'), 'badge' => $openRequestCount, 'tour' => 'nav-requests'],
             ],
         ],
         [
@@ -110,7 +110,7 @@
                     </span>
                 </a>
 
-                <nav aria-label="Main navigation" class="flex-1">
+                <nav aria-label="Main navigation" data-tour="sidebar" class="flex-1">
                     @foreach ($navigationSections as $navigationSection)
                         @if ($navigationSection['items'])
                             <div class="mb-1 px-3">
@@ -123,6 +123,7 @@
                                 @foreach ($navigationSection['items'] as $navigationItem)
                                     <a
                                         href="{{ $navigationItem['href'] }}"
+                                        @isset($navigationItem['tour']) data-tour="{{ $navigationItem['tour'] }}" @endisset
                                         @if ($navigationItem['active']) aria-current="page" @endif
                                         @class([
                                             'relative flex items-center gap-2.5 rounded-md px-3 py-2 text-[13.5px] font-medium text-[#a9b6cc] transition-colors hover:bg-white/5 hover:text-white',
@@ -177,7 +178,9 @@
 
                         <div class="flex items-center gap-3.5">
                             @auth
-                                <livewire:notification-bell />
+                                <div data-tour="notifications">
+                                    <livewire:notification-bell />
+                                </div>
                             @endauth
 
                             @auth
@@ -189,6 +192,7 @@
                                 >
                                     <button
                                         x-ref="profileMenuButton"
+                                        data-tour="profile-menu"
                                         type="button"
                                         aria-label="Profile menu for {{ $userName }}"
                                         aria-haspopup="true"
@@ -269,6 +273,12 @@
                                                     @endif
                                                 </a>
                                             </li>
+                                            <li>
+                                                <a href="{{ route('help') }}" class="flex items-center gap-2.5 px-4 py-2 hover:bg-gray-50 focus:bg-gray-50 focus:outline-none">
+                                                    <x-heroicon-o-question-mark-circle class="size-5 text-gray-400" aria-hidden="true" />
+                                                    {{ __('help.centre.title') }}
+                                                </a>
+                                            </li>
                                             <li class="border-t border-gray-100 pt-1.5 mt-1.5">
                                                 <form method="POST" action="{{ route('logout') }}">
                                                     @csrf
@@ -320,6 +330,10 @@
                 @if (in_array('requests', $fullAccessModuleSlugs, true))
                     <livewire:send-request-modal />
                 @endif
+
+                @auth
+                    <livewire:welcome-tour />
+                @endauth
             </div>
         </div>
     </body>

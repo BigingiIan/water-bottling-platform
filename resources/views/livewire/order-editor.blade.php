@@ -4,7 +4,7 @@
 @endphp
 
 <div class="flex flex-col gap-6">
-    <x-page-header
+    <x-page-header help="orders"
         :title="$order ? 'Edit '.$order->order_number : 'New order'"
         subtitle="Draft orders can be edited freely. Confirming reserves stock and fixes the prices."
     >

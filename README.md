@@ -125,6 +125,20 @@ Request-based communication lets a user ask another department to act without be
 - The forecasting page (`/forecasting`) shows 30 days of history against stored forecasts, tomorrow's cover per SKU, and why a forecast is unavailable when it is.
 - The footer shows a forecast-service status dot to roles with Forecasting access. It is checked at most once a minute and never delays a page.
 
+### Help and onboarding
+- **Help centre** (`/help`): linked from the footer, the profile menu and each page title.
+  - Shows only the guides for modules your role can open, plus "Getting started" and "Asking another department for something".
+  - Each guide covers what the page is for, 3 to 6 numbered task guides, what View and Full let you do, and common problems.
+  - **What you can do:** generated from your role's permissions, so it always matches what you can open.
+  - **Search:** covers only the guides you can see.
+- **Page-title help:** a **?** next to each page title opens a two-sentence explanation and a link to the matching guide. It only appears for modules your role can open.
+- **Welcome tour:** 5 to 7 steps on your first page after setting a password, covering the sidebar, requests, notifications, the profile menu, the dashboard and Help.
+  - Steps for areas your role can't see are skipped.
+  - Back, Next, Skip and Esc work from the keyboard, and on phones the tour shows as a bottom sheet.
+  - It runs once. "Replay the welcome tour" is on the Help page and in My Profile.
+- **Empty states:** empty lists say what belongs there, and offer the action that fills them only when you're allowed to take it.
+- **Where the text lives:** guides are Markdown files in `resources/help/`, and the rest of the interface text is in `lang/en/help.php`.
+
 ### Settings, notifications and audit
 - **Settings** (`/settings`): organisation details, thresholds and defaults such as `requests.default_due_days`, plus the audit trail.
 - **In-app notifications:** stock, leakage, overdue invoices, large payments, errors and requests. Users can switch off some alert types in their profile.
@@ -297,10 +311,12 @@ app/
                             Orders, Requests, Revenue, plus MLForecastClient, NotificationService, SettingsService
   Support/                  Shared helpers: ModuleAccess, YearlySequence, SettingsDate, dashboard registry
 config/settings.php         Setting definitions (defaults, validation, Settings tabs)
+lang/en/help.php            Help centre, tour, popover and empty-state text
 data/                       Synthetic demand dataset
 database/
   migrations/
   seeders/                  Roles, modules, permissions, lines, features, test users, demo data
+resources/help/             Help guides in Markdown, one per module plus general guides
 resources/views/            Blade and Livewire views, shared components, branded error pages
 design-reference/           HTML design mockups
 model_reference/            Original training notebook (reference only)
@@ -315,7 +331,7 @@ php artisan test                 # Laravel suite (in-memory SQLite)
 cd ml && uv run pytest           # prediction service and dashboard
 ```
 
-The Laravel suite covers access control at every boundary, including per-module permissions, request visibility and snapshots, widget gating and fixed query counts.
+The Laravel suite covers access control at every boundary: per-module permissions, request visibility and snapshots, widget gating, which help guides and popovers each role sees, and fixed query counts. A structure test checks that every guide has the required sections and 3 to 6 tasks.
 
 ## Project status
 
@@ -335,7 +351,7 @@ The Laravel suite covers access control at every boundary, including per-module 
 | Equipment / maintenance module | Planned (the module exists for permissions only) |
 | Reports | Planned (sidebar placeholder) |
 | Promotion and temperature data sources for live use | Pending. A source isn't chosen yet. |
-| Help guide (`/help`) | Planned. The footer link appears once the route exists. |
+| In-app help (Help centre, page-title help, welcome tour, empty states) | Complete |
 
 ### Known limitations
 - `sales_data_covered` defaults to `false`. `sales:close-day` marks a day covered once no order dated that day is still open, and forecasts need 14 consecutive covered days.

@@ -7,7 +7,7 @@
         <span x-text="toastMessage"></span>
     </div>
 
-    <x-page-header title="Forecasting" :subtitle="'Tomorrow\'s demand per SKU from the ML service · '.$settingsDate->formatDate(today()->addDay()->toDateString())">
+    <x-page-header help="forecasting" title="Forecasting" :subtitle="'Tomorrow\'s demand per SKU from the ML service · '.$settingsDate->formatDate(today()->addDay()->toDateString())">
         @if ($dashboardUrl || $canGenerate)
             <x-slot:actions>
                 @if ($dashboardUrl)

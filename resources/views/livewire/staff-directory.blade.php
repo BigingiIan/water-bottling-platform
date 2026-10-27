@@ -9,7 +9,7 @@
     $selectClasses = 'rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700';
 @endphp
 <div class="flex flex-col gap-6" x-on:keydown.escape.window="if ($wire.selectedUserId) { $wire.closeUser() } else if ($wire.openMenuUserId) { $wire.closeMenus() }">
-    <x-page-header heading-id="staff-directory-heading" title="Staff Directory" subtitle="Everyone with an AquaOps account, their role and what they can access.">
+    <x-page-header help="users-roles" heading-id="staff-directory-heading" title="Staff Directory" subtitle="Everyone with an AquaOps account, their role and what they can access.">
         <x-slot:actions>
             <button type="button" wire:click="exportCsv" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
                 <x-heroicon-o-arrow-down-tray class="size-4" aria-hidden="true" />

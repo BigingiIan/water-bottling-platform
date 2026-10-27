@@ -1,5 +1,5 @@
 <div class="flex flex-col gap-6">
-    <x-page-header heading-id="error-logs-heading" title="Error Logs" :subtitle="'Branded 403 and 500 errors from the last '.\App\Support\Plural::count((int) app(\App\Services\SettingsService::class)->get('retention.error_log_days', 30), 'day').'.'">
+    <x-page-header help="error-logs" heading-id="error-logs-heading" title="Error Logs" :subtitle="'Branded 403 and 500 errors from the last '.\App\Support\Plural::count((int) app(\App\Services\SettingsService::class)->get('retention.error_log_days', 30), 'day').'.'">
         <x-slot:actions>
             <div class="inline-flex rounded-md border border-gray-300 bg-white p-0.5 text-xs">
                 <button type="button" wire:click="showGroups" @class(['rounded px-2.5 py-1.5', 'bg-blue-600 text-white' => $viewMode === 'groups', 'text-gray-600 hover:bg-gray-100' => $viewMode !== 'groups']) aria-pressed="{{ $viewMode === 'groups' ? 'true' : 'false' }}">Grouped</button>
@@ -131,7 +131,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $canViewSensitiveDetails ? 8 : 7 }}" class="px-[18px] py-8 text-center text-sm text-gray-500">No error events match these filters.</td>
+                            <td colspan="{{ $canViewSensitiveDetails ? 8 : 7 }}"><x-empty-state key="error_logs" icon="shield-check" :filtered="$statusFilter !== null || $userFilter !== null || $moduleFilter !== null || $referenceSearch !== ''" /></td>
                         </tr>
                     @endforelse
                 </tbody>

@@ -24,7 +24,7 @@
         <span x-ref="toastMessage"></span>
     </div>
 
-    <x-page-header heading-id="permission-matrix-heading" title="Roles & Permissions" subtitle="Decide which parts of AquaOps each role can use.">
+    <x-page-header help="users-roles" heading-id="permission-matrix-heading" title="Roles & Permissions" subtitle="Decide which parts of AquaOps each role can use.">
         @if ($canManageRoles)
             <x-slot:actions>
                 <button

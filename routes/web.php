@@ -8,6 +8,7 @@ use App\Http\Controllers\UserImpersonationController;
 use App\Livewire\Dashboard;
 use App\Livewire\ErrorLogs;
 use App\Livewire\ForecastingPage;
+use App\Livewire\HelpCentre;
 use App\Livewire\InventoryOverview;
 use App\Livewire\InvoiceDetail;
 use App\Livewire\InvoicesPage;
@@ -65,6 +66,7 @@ Route::middleware('auth')->group(function () {
         ->middleware('module.access:settings')
         ->name('audit-logs.redirect');
     Route::get('/notifications', NotificationsPage::class)->name('notifications.index');
+    Route::get('/help', HelpCentre::class)->name('help');
     Route::middleware('module.access:requests')->group(function () {
         Route::get('/requests', RequestsPage::class)->name('requests.index');
         Route::get('/requests/{departmentRequest}', RequestDetail::class)->name('requests.show');

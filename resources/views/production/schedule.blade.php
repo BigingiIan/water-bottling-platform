@@ -1,5 +1,5 @@
 <x-app-layout title="Schedule" breadcrumb-section="Production" active-item="Schedule">
-    <x-page-header class="mb-6" title="Production Schedule" :subtitle="app(\App\Support\SettingsDate::class)->formatInstantDate(now())">
+    <x-page-header help="production" class="mb-6" title="Production Schedule" :subtitle="app(\App\Support\SettingsDate::class)->formatInstantDate(now())">
         @if (app(\App\Support\ModuleAccess::class)->can(auth()->user(), 'production', true))
             <x-slot:actions>
                 <button type="button" onclick="Livewire.dispatch('open-create-modal')" class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700">

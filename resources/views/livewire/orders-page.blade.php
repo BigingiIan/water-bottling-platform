@@ -10,7 +10,7 @@
         <span x-text="toastMessage"></span>
     </div>
 
-    <x-page-header title="Orders" subtitle="Customer orders, dispatch, and delivery.">
+    <x-page-header help="orders" title="Orders" subtitle="Customer orders, dispatch, and delivery.">
         @if ($canWrite)
             <x-slot:actions>
                 @if ($activeTab === 'customers')
@@ -99,11 +99,8 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="px-[18px] py-10 text-center text-sm text-gray-500">
-                                    No orders match these filters.
-                                    @if ($canWrite)
-                                        <a href="{{ route('orders.create') }}" class="ml-1 font-semibold text-blue-700 hover:text-blue-900">Create an order</a>
-                                    @endif
+                                <td colspan="6">
+                                    <x-empty-state key="orders" icon="clipboard-document-list" :filtered="$statusFilter !== '' || $customerFilter !== '' || $dateFrom !== '' || $dateTo !== ''" :can="$canWrite" :action-href="route('orders.create')" />
                                 </td>
                             </tr>
                         @endforelse
@@ -147,7 +144,7 @@
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="7" class="px-[18px] py-10 text-center text-sm text-gray-500">No customers yet.</td></tr>
+                            <tr><td colspan="7"><x-empty-state key="customers" icon="building-storefront" :can="$canWrite" action-click="openCustomerModal" /></td></tr>
                         @endforelse
                     </tbody>
                 </table>

@@ -18,7 +18,7 @@
         <div class="flex items-center gap-3 whitespace-nowrap">
             <span>AquaOps <span class="tabular-nums">v{{ $footerDetails->version() }}</span></span>
             @if ($helpUrl)
-                <a href="{{ $helpUrl }}" class="font-semibold text-blue-700 hover:text-blue-900 hover:underline">Help</a>
+                <a href="{{ $helpUrl }}" data-tour="help-link" class="font-semibold text-blue-700 hover:text-blue-900 hover:underline">{{ __('help.centre.title') }}</a>
             @endif
             @if (! $reduced && $showForecastStatus)
                 <livewire:forecast-service-status />

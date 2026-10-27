@@ -21,7 +21,7 @@
         <span x-text="toastMessage"></span>
     </div>
 
-    <x-page-header class="print:hidden" :title="$invoice->displayNumber()" :subtitle="$invoice->customer->name.' · from order '.$invoice->order->order_number">
+    <x-page-header help="invoicing" class="print:hidden" :title="$invoice->displayNumber()" :subtitle="$invoice->customer->name.' · from order '.$invoice->order->order_number">
         <x-slot:actions>
             <x-invoice-status-badge :invoice="$invoice" class="mr-1" />
             <a href="{{ route('invoices.index') }}" class="{{ $secondaryButton }}"><x-heroicon-o-arrow-left class="size-4" aria-hidden="true" />All invoices</a>

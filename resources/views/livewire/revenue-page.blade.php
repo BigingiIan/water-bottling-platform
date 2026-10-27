@@ -14,7 +14,7 @@
 @endphp
 
 <div class="flex flex-col gap-6">
-    <x-page-header title="Revenue" subtitle="What was invoiced, what was collected and what is still owed. Read only.">
+    <x-page-header help="revenue" title="Revenue" subtitle="What was invoiced, what was collected and what is still owed. Read only.">
         <x-slot:actions>
             <button type="button" wire:click="exportCsv" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
                 <x-heroicon-o-arrow-down-tray class="size-4" aria-hidden="true" />Export CSV

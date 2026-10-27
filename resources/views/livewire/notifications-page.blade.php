@@ -88,7 +88,7 @@
                     </div>
                 </li>
             @empty
-                <li class="px-[18px] py-10 text-center text-sm text-gray-500">No notifications match these filters.</li>
+                <li><x-empty-state key="notifications" icon="bell" :filtered="$readFilter !== 'all' || $severityFilter !== ''" /></li>
             @endforelse
         </ul>
 

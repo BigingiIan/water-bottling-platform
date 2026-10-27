@@ -73,7 +73,7 @@ class SharedLayoutTest extends TestCase
             $content = $this->get($uri)->assertOk()->getContent();
 
             $this->assertMatchesRegularExpression(
-                '/<header class="flex flex-wrap items-end justify-between gap-3">\s*<div class="min-w-0">\s*<h1\s+id="'.$headingId.'"\s+class="text-\[21px\] font-extrabold tracking-tight text-gray-900">'.preg_quote($title, '/').'<\/h1>/',
+                '/<header class="flex flex-wrap items-end justify-between gap-3">\s*<div class="min-w-0">\s*<h1\s+id="'.$headingId.'"\s+class="text-\[21px\] font-extrabold tracking-tight text-gray-900">'.preg_quote($title, '/').'(?:<(?:span|!--)[\s\S]*?)?<\/h1>/',
                 $content,
             );
             $this->assertLessThan(

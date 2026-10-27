@@ -49,7 +49,7 @@ class AppFooterTest extends TestCase
             ->assertSee('v2.4.1')
             ->assertSee('&copy; 2026', false)
             ->assertSee('Checking forecast service')
-            ->assertDontSee('>Help</a>', false)
+            ->assertSee('href="'.route('help').'" data-tour="help-link"', false)
             ->getContent();
 
         $this->assertGreaterThan(strpos($content, '</main>'), strpos($content, '<footer'));

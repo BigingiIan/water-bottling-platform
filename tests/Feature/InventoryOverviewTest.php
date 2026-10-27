@@ -255,8 +255,8 @@ class InventoryOverviewTest extends TestCase
         Livewire::test(InventoryOverview::class)
             ->assertSee('Warehouse stock');
 
-        // 18 for the page plus one fixed check for the Send request buttons.
-        $this->assertLessThanOrEqual(19, $queryCount);
+        // 18 for the page, plus one fixed check each for the Send request buttons and the page-title help popover.
+        $this->assertLessThanOrEqual(20, $queryCount);
     }
 
     public function test_adjustment_records_stock_movement_and_audit_row(): void

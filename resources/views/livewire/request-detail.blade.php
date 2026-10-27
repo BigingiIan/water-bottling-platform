@@ -14,7 +14,7 @@
         </a>
     </div>
 
-    <x-page-header heading-id="request-heading" :title="$request->subject" :subtitle="$request->reference.' · '.$request->type->label().' · sent '.$request->created_at->diffForHumans()">
+    <x-page-header help="requests" heading-id="request-heading" :title="$request->subject" :subtitle="$request->reference.' · '.$request->type->label().' · sent '.$request->created_at->diffForHumans()">
         <x-slot:actions>
             <x-request-priority-badge :priority="$request->priority" />
             <x-request-status-badge :status="$request->status" />

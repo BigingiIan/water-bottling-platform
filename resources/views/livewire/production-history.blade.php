@@ -5,7 +5,7 @@
             .' · '.number_format($totalActual).' / '.number_format($totalTarget).' units'
             .($totalVariancePct !== null ? ' ('.($totalVariancePct > 0 ? '+' : '').$totalVariancePct.'%)' : '');
     @endphp
-    <x-page-header class="mb-6" title="Production History" :subtitle="$historySubtitle">
+    <x-page-header help="production" class="mb-6" title="Production History" :subtitle="$historySubtitle">
         <x-slot:actions>
             <button type="button" wire:click="exportCsv" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
                 <x-heroicon-o-arrow-down-tray class="size-4" aria-hidden="true" />
@@ -103,7 +103,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="10" class="px-[18px] py-8 text-center text-sm text-gray-500">No production record for this date range and filters.</td>
+                            <td colspan="10"><x-empty-state key="production_history" icon="clock" :filtered="$skuFilter !== '' || $lineFilter !== '' || $qualityFilter !== ''" /></td>
                         </tr>
                     @endforelse
                 </tbody>
