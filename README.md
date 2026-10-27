@@ -2,7 +2,7 @@
 
 Final Year Project (U-CS 106), Strathmore University.
 
-An internal operations platform for Kenyan water bottling SMEs, combining production scheduling, inventory and sales tracking, role-based access control, and an ensemble machine learning model (Prophet + XGBoost + LSTM, stacked) for daily demand forecasting.
+AquaOps is an internal operations platform for Kenyan water bottling SMEs. It brings production, inventory, orders, invoicing and revenue into one role-based system, adds request-based communication between departments, and uses a machine learning service for daily demand forecasting. Prophet, XGBoost, an LSTM and stacked combinations were evaluated; Prophet alone is served because it scored best on the held-out test.
 
 > **Status:** work in progress. See [Project status](#project-status) for what is built, what is pending, and known limitations.
 
@@ -17,6 +17,7 @@ An internal operations platform for Kenyan water bottling SMEs, combining produc
 - [Test accounts](#test-accounts)
 - [Machine learning](#machine-learning)
 - [Forecast integration](#forecast-integration)
+- [Scheduled commands](#scheduled-commands)
 - [Repository layout](#repository-layout)
 - [Testing](#testing)
 - [Project status](#project-status)
@@ -30,69 +31,132 @@ An internal operations platform for Kenyan water bottling SMEs, combining produc
 │  Laravel web application │ ──────────────► │  FastAPI prediction      │
 │  Livewire UI, RBAC, DB   │  POST /predict  │  service (stateless)     │
 │  MLForecastClient        │ ◄────────────── │  loads saved per-SKU     │
-└────────────┬─────────────┘                 │  model artifacts         │
+└────────────┬─────────────┘   GET /health   │  model bundles           │
              │                               └──────────────────────────┘
              ▼
-        MySQL database
+        MySQL database                        Streamlit dashboard (optional)
+                                              reads the same bundles and metrics
 ```
 
 - **Laravel owns the data.** It assembles each forecast request (recent sales history plus date features) from its own database and sends it to the service.
-- **The prediction service is stateless.** It only loads trained models and scores whatever feature vector it receives. There is no cache and no independent data refresh.
-- **Forecasts fail honestly.** If artifacts, history, or features are missing, the service returns an error and the UI shows "forecast unavailable" rather than a placeholder number.
+- **The prediction service is stateless.** It only loads trained models and scores the features it receives. There is no cache and no independent data refresh.
+- **Forecasts fail honestly.** If artifacts, history or features are missing, the service returns an error and the UI shows the specific reason the forecast is unavailable, never a placeholder number.
 
 ## Tech stack
 
 | Layer | Technology |
 |---|---|
-| Web backend | Laravel, Livewire |
-| Database | MySQL |
-| Prediction service | FastAPI (Python) |
+| Web backend | PHP 8.3+, Laravel 13, Livewire 4 |
+| Database | MySQL (SQLite in memory for tests) |
+| Frontend | Blade, Livewire, Alpine (bundled with Livewire), Tailwind CSS 4, Vite, Heroicons |
+| Charts | Inline SVG Blade components (no JavaScript chart library) |
+| Documents | barryvdh/laravel-dompdf for invoice PDFs |
+| Prediction service | FastAPI (Python 3.11+, managed with `uv`) |
 | ML | Prophet, XGBoost, TensorFlow/Keras (LSTM), scikit-learn |
-| Frontend | Blade, Livewire, Chart.js |
-| Model development | Google Colab notebook |
+| Model dashboard | Streamlit |
 
 ## Features
 
-### Access control (RBAC): complete
-- Five roles: Administrator, Production Manager, Production Staff, Inventory Staff, Maintenance Staff
-- Eight modules, each with a three-state access level per role: `none`, `view`, `full`
-- Staff directory (`/staff`) with search and role/status/module filters
-- Live permission matrix (`/staff/permissions`): clicking a cell cycles `none → view → full` and persists immediately
-- Enforcement: `none` blocks page load (403), `view` allows reading but blocks writes (403), `full` allows both
-- Admin-created accounts only (no self-registration), login per user
-- Role-aware sidebar: users only see modules they can access
-- Admin "View As" for testing other roles' access
-- Branded 403, 404 and 500 error pages. 500 pages never render exception details.
+Access is controlled per module. Each role has one of three levels per module: `none` (the page returns 403), `view` (read only, writes return 403) or `full`. The sidebar, dashboard and buttons only show what the signed-in role can use.
 
-### Production: in progress
-- Production schedule page with date-scoped KPIs, line/SKU/status filters, and run detail
-- "Log Production" modal that writes `production_logs` entries for the authenticated operator, gated by Production-module `full` access
-- Forecast strip showing the ML-suggested quantity for the next active SKU, or a clear unavailable state
+### Access control and staff
+- Five seeded roles (Administrator, Production Manager, Production Staff, Inventory Staff, Maintenance Staff) plus custom roles.
+- Twelve modules: Dashboard, Production, Inventory, Orders, Equipment, Forecasting, Invoicing, Revenue, Requests, Users & Roles, Settings, Error Logs.
+- **Staff Directory** (`/staff`):
+  - Search and filters by role, status and module, plus a CSV export that respects the filters.
+  - A row menu to change role, reset a password, or suspend and reactivate.
+  - A side panel per user with role, status, last active and recent activity.
+- **Roles & Permissions** (`/staff/permissions`):
+  - Role cards with user and module counts.
+  - A matrix with a None / View / Full control per cell. Changes are staged and saved together after a confirmation summary.
+  - The Administrator role can never be reduced, and system roles can't be deleted.
+- Admin-created accounts only, with email invitations and a signed set-password link. Administrators can "View As" another user.
+- Branded 403, 404 and 500 pages. 500 pages never show exception details.
 
-### Inventory: in progress
-- Inventory overview page (`/inventory`) with stock levels, filtering, and batch management, gated by the Inventory module
-- `StockService` records every change as a `stock_movements` entry and derives stock levels and status checks from them
-- Leakage reports are flagged automatically when the discrepancy exceeds a threshold (`LeakageReportFlag`)
+### Dashboard
+- **Widgets:** built from a registry, and only for modules the user can access. Nothing renders and no query runs for a widget the user can't see.
+- **Role defaults:** each role type has a default layout. Users can show, hide and reorder widgets with "Customise", and the layout is saved per user.
+- **Needs your attention:** the most urgent items across permitted modules:
+  - out-of-stock, critical and low stock
+  - leakage reports at investigate level
+  - orders that can't be dispatched
+  - overdue invoices
+  - unread requests
+- **Quick actions:** shown only for actions the user can perform.
+- **Refresh:** widgets refresh every 60 seconds.
 
-### User invitations
-- Administrators invite staff by email (`UserInvitation` mailable); invitees set their own password via a signed link
+### Production
+- Schedule (`/production/schedule`), production runs with logging and completion, and history.
+- Process-loss checks run when a run is completed.
 
-### Planned
-Orders views, quality, maintenance, reports, and a dedicated forecasting page.
+### Inventory
+- Stock overview (`/inventory`) with per-product cover against the forecast, warehouse stock lines, batches, leakage reports and stock movements.
+- `StockService` records every change as a stock movement. Stock counts, adjustments and stock-in are recorded through it.
+- Leakage detection grades reports as Review or Investigate, from manual entries, batch checks and stock counts.
+
+### Orders, invoicing and revenue
+- **Orders** (`/orders`): draft, confirm (reserves stock), dispatch (deducts stock oldest batch first), deliver, or cancel. Order numbers run sequentially per year.
+- **Invoicing** (`/invoices`):
+  - Invoices are raised from orders, with VAT, payments and overdue tracking.
+  - Issued invoices are locked; a mistake is corrected by voiding and reissuing.
+  - Each invoice has a PDF.
+- **Revenue** (`/revenue`): invoiced, collected and outstanding amounts.
+
+### Requests
+Request-based communication lets a user ask another department to act without being given access to that department's module. Requests aren't a chat: each one has an owner, a status and an optional link to a record.
+
+- **Visibility:** you see requests you sent and requests addressed to your role. Administrators see every request, and nobody sees other departments' threads.
+- **Sending:** "Send request" appears on order detail, production runs, batches, leakage reports and stock lines, and "New request" on the Requests page.
+- **Snapshot of the record:**
+  - Captured on the server from a fixed set of safe fields (for an order: customer, items, status and requested date). Prices are never included.
+  - A sender can only attach a record from a module they can view.
+  - Recipients always see the snapshot. They get a link to the live record only if they can view it.
+- **Status:** only the receiving department or an administrator moves a request through Acknowledged, In progress, Done or Declined. Declining needs a reason.
+- **What the sender can do:** comment, cancel while the request is open, and reopen a declined request once.
+- **Access requests:** "Request Access" on the 403 page sends an access request to administrators with the user's role and the page they tried to open. Approving it means changing the role in Roles & Permissions; nothing is granted automatically.
+- **Notifications:**
+  - **New request:** to the department.
+  - **Status change:** to the sender.
+  - **Comments:** to the other side of the thread.
+  - **Overdue:** a daily reminder, sent once per request.
+- **Badge:** the sidebar shows the number of open requests.
+
+### Forecasting
+- The forecasting page (`/forecasting`) shows 30 days of history against stored forecasts, tomorrow's cover per SKU, and why a forecast is unavailable when it is.
+- The footer shows a forecast-service status dot to roles with Forecasting access. It is checked at most once a minute and never delays a page.
+
+### Help and onboarding
+- **Help centre** (`/help`): linked from the footer, the profile menu and each page title.
+  - Shows only the guides for modules your role can open, plus "Getting started" and "Asking another department for something".
+  - Each guide covers what the page is for, 3 to 6 numbered task guides, what View and Full let you do, and common problems.
+  - **What you can do:** generated from your role's permissions, so it always matches what you can open.
+  - **Search:** covers only the guides you can see.
+- **Page-title help:** a **?** next to each page title opens a two-sentence explanation and a link to the matching guide. It only appears for modules your role can open.
+- **Welcome tour:** 5 to 7 steps on your first page after setting a password, covering the sidebar, requests, notifications, the profile menu, the dashboard and Help.
+  - Steps for areas your role can't see are skipped.
+  - Back, Next, Skip and Esc work from the keyboard, and on phones the tour shows as a bottom sheet.
+  - It runs once. "Replay the welcome tour" is on the Help page and in My Profile.
+- **Empty states:** empty lists say what belongs there, and offer the action that fills them only when you're allowed to take it.
+- **Where the text lives:** guides are Markdown files in `resources/help/`, and the rest of the interface text is in `lang/en/help.php`.
+
+### Settings, notifications and audit
+- **Settings** (`/settings`): organisation details, thresholds and defaults such as `requests.default_due_days`, plus the audit trail.
+- **In-app notifications:** stock, leakage, overdue invoices, large payments, errors and requests. Users can switch off some alert types in their profile.
+- **Audit log:** records settings changes, user and role actions, invoices, payments and requests.
 
 ## Getting started
 
 ### Prerequisites
-- PHP and Composer (TODO: confirm version)
-- Node.js and npm
+- PHP 8.3 or later and Composer
+- Node.js (20.19+ or 22.12+, as required by Vite 8) and npm
 - MySQL
-- Python 3.10+ (TODO: confirm) for the prediction service
+- Python 3.11 or later and [`uv`](https://docs.astral.sh/uv/) for the prediction service
 
 ### Laravel application
 
 ```bash
-git clone <repo-url>        # TODO: add repo URL
-cd <repo-folder>
+git clone https://github.com/BigingiIan/water-bottling-platform.git
+cd water-bottling-platform
 
 composer install
 cp .env.example .env
@@ -104,26 +168,51 @@ php artisan migrate --seed
 npm install
 npm run build
 
-php artisan serve
+composer run dev        # or: php artisan serve, plus npm run dev
 ```
 
-Seeders create roles, modules, role-module permissions, and the production lines. Set `APP_DEBUG=false` for anything other than local development.
+`composer run setup` does the install, key, migrate and build steps in one go, but doesn't seed.
+
+The database seeder creates roles, modules, permissions, production lines and daily SKU features. In `local` and `testing` it also creates the [test accounts](#test-accounts). Optional demo data, for local use only:
+
+```bash
+php artisan db:seed --class=DemoDataSeeder          # inventory demo data
+php artisan db:seed --class=ForecastingDemoSeeder   # 60 days of sales history from data/kenya_water_demand_daily.csv
+```
+
+Useful `.env` keys:
+
+| Key | Purpose |
+|---|---|
+| `ML_FORECAST_URL` | Prediction service URL (default `http://127.0.0.1:8001`) |
+| `ML_FORECAST_TIMEOUT` | Request timeout in seconds (default 3) |
+| `ML_MODEL_DIR` | Model bundles Laravel reads manifests from (default `ml/outputs/saved_models`) |
+| `ML_DASHBOARD_URL` | Link to the Streamlit dashboard from the forecasting page |
+| `APP_VERSION` | Version shown in the footer. Set it at deploy time, for example from `git describe --tags --abbrev=0`. Defaults to `0.1.0`. |
+
+Set `APP_DEBUG=false` for anything other than local development. Run `php artisan schedule:work` locally so the [scheduled commands](#scheduled-commands) fire.
 
 ### Prediction service
 
-```bash
-cd <path-to-fastapi-service>   # TODO: confirm path
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn api:app --reload --port 8001   # TODO: confirm module name and port
+From the repository root, in PowerShell:
+
+```powershell
+$env:ML_MODEL_DIR = "$PWD\ml\outputs\saved_models"
+uv run --directory ml uvicorn serving.api:app --app-dir . --host 0.0.0.0 --port 8001
 ```
 
-Point Laravel at the service via the relevant `.env` key (TODO: document the exact variable name).
+Set `ML_MODEL_DIR` explicitly. If you don't, the service falls back to `ml/saved_models`, which holds an older stacked bundle. Laravel reads its manifests from `ml/outputs/saved_models`, the current Prophet-only bundle written by the training pipeline, so both sides should point there. Training, evaluation and the bundle format are documented in [`ml/README.md`](ml/README.md).
+
+The optional model dashboard:
+
+```powershell
+cd ml
+uv run streamlit run dashboard/app.py
+```
 
 ## Test accounts
 
-`TestUserSeeder` creates one account per role. It only runs in `local` and `testing` environments.
+`TestUserSeeder` creates one account per role. It only runs in `local` and `testing` environments, and every account uses the password `password`.
 
 | Role | Email |
 |---|---|
@@ -133,22 +222,24 @@ Point Laravel at the service via the relevant `.env` key (TODO: document the exa
 | Inventory Staff | `inventory@aquaops.test` |
 | Maintenance Staff | `maintenance@aquaops.test` |
 
-The development password is set in the seeder. Never run this seeder against a shared or production database.
+Never run this seeder against a shared or production database.
 
 ## Machine learning
 
-### Model
+### Models evaluated
 
-A meta-learner stacking ensemble, trained per SKU:
+Per SKU, against a seasonal-naive baseline:
 
-1. **Base models:** Prophet (trend and seasonality with promotion, holiday, school-term and temperature regressors), XGBoost (lag and rolling features), and an LSTM (14-day lookback)
-2. **Meta-learner:** linear regression over the three base predictions
+- **Prophet:** trend and seasonality, with promotion, public holiday, school term and temperature regressors.
+- **XGBoost:** lag and rolling-window features, with tuned hyperparameters.
+- **LSTM:** 14-day lookback.
+- **Stacked combinations** of the three: convex weights, the mean of Prophet and XGBoost, and unconstrained least squares.
 
-The notebook is kept in `model_reference/` as the reference for training and validation. It is a development artifact, not a deployable component.
+**Prophet alone was chosen as the served configuration before the final test.** The stackers did not beat it: the best gave Prophet almost all of the weight. The trainer refits on every row and writes stacker weights of `[1, 0, 0]`, so only Prophet is loaded and run at inference time. XGBoost and the LSTM are still fitted and saved for comparison.
 
 ### Data
 
-Training uses a synthetic dataset (fixed seed, reproducible):
+Training uses a synthetic dataset (`data/kenya_water_demand_daily.csv`, fixed seed, reproducible):
 
 - 5 SKUs: 500ml, 1L, 5L, 10L, 20L
 - Daily records from 2023-01-01 to 2025-12-31
@@ -156,83 +247,116 @@ Training uses a synthetic dataset (fixed seed, reproducible):
 
 ### Evaluation protocol
 
-- Chronological split per SKU: **60% base-train / 20% meta-train / 20% final-test**
-- Base models are fit on base-train. The meta-learner is fit on base-model predictions over meta-train. All reported metrics come from final-test.
-- Lag and lookback history is carried across split boundaries so no rows are lost or leaked.
-- Metrics: RMSE, MAPE, sMAPE, reported per SKU and averaged
+- Rolling-origin evaluation per SKU, with 6 folds and horizons from 1 to 28 days.
+- Development folds are used for tuning and model selection. The `final_test` period is run once, after the configuration is chosen.
+- Temperature uses monthly means, since daily temperature isn't known in advance.
+- Metrics: RMSE, MAPE and sMAPE, per SKU and averaged, with fold standard deviations.
 
 ### Results
 
-<!-- TODO: refresh from a full run of the refactored notebook before publishing numbers -->
+Final-test results, averaged over the five SKUs (one-day-ahead forecasts, 6 folds):
 
-Results will be added after the refactored notebook is run end to end. An earlier run showed the stacked ensemble narrowly beating Prophet (the strongest single model) on the average row, with LSTM weakest. The meta-learner coefficients should be checked to see how much weight each base model receives.
+| Model | RMSE | MAPE | sMAPE |
+|---|---:|---:|---:|
+| **Prophet (served)** | **121.3** | **12.86%** | **12.36%** |
+| Stacker, convex weights | 121.4 | 12.73% | 12.33% |
+| Stacker, unconstrained least squares | 121.4 | 12.80% | 12.35% |
+| Mean of Prophet and XGBoost | 123.9 | 12.71% | 12.49% |
+| XGBoost (tuned) | 134.1 | 13.40% | 13.49% |
+| LSTM | 155.2 | 19.90% | 18.70% |
+| Seasonal naive | 188.9 | 19.39% | 18.71% |
+
+Averaged over 1 to 28 days ahead, Prophet's RMSE is 122.2 and its MAPE is 12.69%. These numbers come from `ml/outputs/saved_models/forecast_metrics_summary.csv`, which is regenerated by the training pipeline.
 
 ### Known limitations
 
-- Prophet's yearly seasonality is disabled automatically when a training slice has under 730 days of history, which applies to the base-train split.
-- LSTM likely underperforms because each SKU has only about 650 training rows.
+- The model is trained on synthetic data. Real-world accuracy depends on capturing operational sales data.
+- The LSTM underperforms, most likely because each SKU has only a few hundred training rows.
 - Eid holidays in the synthetic generator use hardcoded approximate dates.
-- The model was trained on synthetic data. Real-world accuracy depends on operational data being captured.
 
 ## Forecast integration
 
-`POST /predict` returns a stacked ensemble prediction along with `model_version` and `rmse_score`.
+`POST /predict` returns a prediction with `model_version` and `rmse_score`, and `GET /health` reports reachability and the model version served per SKU.
 
 How Laravel builds a request:
 
-- **History:** daily `units_sold` from `sales_transactions.quantity`, joined through `warehouse_stock` to `products`. A missing day is treated as zero **only** if that SKU/date is marked `sales_data_covered`; otherwise the history is considered incomplete.
+- **History:** daily `units_sold` from `sales_transactions.quantity`, joined through `warehouse_stock` to `products`. A missing day counts as zero **only** if that SKU and date are marked `sales_data_covered`; otherwise the history is incomplete.
 - **Requirement:** 14 consecutive covered history days plus complete features.
 - **Features:** read from `daily_sku_features` (`is_promotion`, `is_public_holiday`, `is_school_term`, `temperature_c`).
-- **Persistence:** successful results are upserted into `forecast_records`, keyed by product, forecast date, and model version, so re-renders never create duplicates.
+- **Persistence:** results are upserted into `forecast_records`, keyed by product, forecast date and model version, so re-renders never create duplicates.
 
-Each SKU needs an artifact bundle plus a manifest (`metadata.json` with `model_version` and `rmse_score`). Until a SKU has both, its forecast stays unavailable.
+Each SKU needs a model bundle with a manifest (`model_version` and `rmse_score`). Until a SKU has both, its forecast stays unavailable.
+
+## Scheduled commands
+
+All run in the operations timezone (the `organisation.timezone` setting, default Africa/Nairobi). The scheduler must be running (`php artisan schedule:work` locally, or a cron entry for `schedule:run` in production).
+
+| Command | When | What it does |
+|---|---|---|
+| `errors:prune` | daily | Deletes error events past the configured retention period |
+| `sales:close-day` | 17:45 | Marks the day's sales complete for forecasting, once no order dated that day is still open |
+| `forecasts:generate` | 18:00 | Generates tomorrow's forecasts |
+| `invoices:notify-overdue` | 08:00 | Notifies invoicing users about each overdue invoice, once |
+| `requests:notify-overdue` | 08:05 | Notifies the receiving department about each overdue request, once |
 
 ## Repository layout
 
-<!-- TODO: adjust to match the actual repo -->
-
 ```
 app/
-  Livewire/                 Livewire components (staff, permissions, production schedule, inventory)
-  Services/MLForecastClient.php
-  Services/Inventory/       StockService (stock movements and calculations)
-  Support/                  Helpers such as LeakageReportFlag
-  Mail/                     UserInvitation mailable
-  Exceptions/Inventory/     Domain exceptions for stock operations
+  Console/Commands/         Scheduled commands (forecasts, sales day, overdue invoices and requests)
+  Http/Controllers/         Login, password set, View As, access requests, invoice PDFs
+  Livewire/                 Pages and modals; Dashboard/ holds the dashboard widgets
+  Models/                   Eloquent models
+  Services/                 Domain services: Dashboard, Forecasting, Inventory, Invoicing, Leakage,
+                            Orders, Requests, Revenue, plus MLForecastClient, NotificationService, SettingsService
+  Support/                  Shared helpers: ModuleAccess, YearlySequence, SettingsDate, dashboard registry
+config/settings.php         Setting definitions (defaults, validation, Settings tabs)
+lang/en/help.php            Help centre, tour, popover and empty-state text
+data/                       Synthetic demand dataset
 database/
   migrations/
-  seeders/                  Roles, modules, permissions, production lines, test users
-resources/views/            Blade and Livewire views, branded error pages
-design-reference/           HTML design mockups (RBAC, production, inventory, error states)
-model_reference/            Training notebook (reference for ML work)
-ml/                         Training code, prediction service, and ML tests (see ml/README.md)
-tests/
+  seeders/                  Roles, modules, permissions, lines, features, test users, demo data
+resources/help/             Help guides in Markdown, one per module plus general guides
+resources/views/            Blade and Livewire views, shared components, branded error pages
+design-reference/           HTML design mockups
+model_reference/            Original training notebook (reference only)
+ml/                         Training, prediction service, dashboard and ML tests (see ml/README.md)
+tests/                      Feature and unit tests
 ```
 
 ## Testing
 
 ```bash
-php artisan test            # Laravel suite
-# FastAPI suite: TODO add command (e.g. pytest from the service directory)
+php artisan test                 # Laravel suite (in-memory SQLite)
+cd ml && uv run pytest           # prediction service and dashboard
 ```
 
-Inventory coverage lives in `InventoryOverviewTest`, `Services/Inventory/StockServiceTest` and `Unit/Support/LeakageReportFlagTest`.
+The Laravel suite covers access control at every boundary: per-module permissions, request visibility and snapshots, widget gating, which help guides and popovers each role sees, and fixed query counts. A structure test checks that every guide has the required sections and 3 to 6 tasks.
 
 ## Project status
 
 | Area | Status |
 |---|---|
-| RBAC (schema, matrix, enforcement, login, view-as, error pages) | Complete |
-| Production schedule and log production | Wired to real data |
-| User invitations by email | Complete |
-| Prediction service and Laravel client | Built, tested |
-| `train_pipeline.py` and saved model artifacts | **Pending.** Real predictions need this. |
-| Promotion and temperature data sources | **Pending.** Source not yet chosen. |
-| Specific forecast-unavailable reasons in the UI | Optional polish (the client returns only a nullable float today) |
-| Inventory overview and stock movements | Built, tested |
-| Orders, quality, maintenance, reports modules | Planned |
+| RBAC (roles, permission matrix, enforcement, login, invitations, View As, error pages) | Complete |
+| Staff Directory and Roles & Permissions | Complete |
+| Role-aware dashboard (widgets, customise, attention list, quick actions) | Complete |
+| Production schedule, runs and history | Complete |
+| Inventory (stock, batches, leakage detection, stock counts, movements) | Complete |
+| Orders | Complete |
+| Invoicing, payments and invoice PDFs | Complete |
+| Revenue | Complete |
+| Requests between departments | Complete |
+| Settings, notifications and audit log | Complete |
+| Prediction service, training pipeline and Laravel client | Complete (Prophet served) |
+| Equipment / maintenance module | Planned (the module exists for permissions only) |
+| Reports | Planned (sidebar placeholder) |
+| Promotion and temperature data sources for live use | Pending. A source isn't chosen yet. |
+| In-app help (Help centre, page-title help, welcome tour, empty states) | Complete |
 
 ### Known limitations
-- `sales_data_covered` defaults to `false`; an ingestion process must mark dates covered only after confirming transaction data is complete.
-- School terms are a documented month-based approximation, and Eid dates are not inferred.
-- "Request Access" on the 403 page is a placeholder, not a workflow.
+- `sales_data_covered` defaults to `false`. `sales:close-day` marks a day covered once no order dated that day is still open, and forecasts need 14 consecutive covered days.
+- School terms are a documented month-based approximation, and Eid dates aren't inferred.
+- Invoices are internal only: there's no eTIMS/KRA integration, no credit notes (corrections are void then reissue), and invoices aren't emailed.
+- Revenue days are grouped in UTC, not Nairobi local time.
+- Below the `lg` breakpoint the sidebar becomes a slide-out menu, and wide tables scroll horizontally inside their cards.
+- In a hidden browser tab, dashboard polling slows down (Livewire throttles it) rather than stopping completely.

@@ -358,7 +358,7 @@ class ProfileTest extends TestCase
 
         $this->actingAs($user)
             ->get(route('profile.show'))
-            ->assertSee('aria-label="Profile menu for '.$user->name.'"', false)
+            ->assertSee('aria-label="Profile menu for '.e($user->name).'"', false)
             ->assertSee('href="'.route('profile.show').'"', false)
             ->assertSee('href="'.route('notifications.index').'"', false)
             ->assertSee('Sign out')

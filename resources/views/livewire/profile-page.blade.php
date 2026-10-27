@@ -9,10 +9,18 @@
         <span x-text="toastMessage"></span>
     </div>
 
-    <header>
-        <h1 class="text-[21px] font-extrabold tracking-tight text-gray-900">My Profile</h1>
-        <p class="mt-1 text-[13px] text-gray-500">Manage your details, password, sessions, and preferences.</p>
-    </header>
+    <x-page-header title="My Profile" subtitle="Manage your details, password, sessions, and preferences.">
+        <x-slot:actions>
+            <a href="{{ route('help') }}" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
+                <x-heroicon-o-question-mark-circle class="size-4" aria-hidden="true" />
+                {{ __('help.centre.title') }}
+            </a>
+            <button type="button" wire:click="$dispatch('replay-tour')" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
+                <x-heroicon-o-play-circle class="size-4" aria-hidden="true" />
+                {{ __('help.centre.replay_tour') }}
+            </button>
+        </x-slot:actions>
+    </x-page-header>
 
     @if ($isViewingAs)
         <p role="status" class="rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-950">

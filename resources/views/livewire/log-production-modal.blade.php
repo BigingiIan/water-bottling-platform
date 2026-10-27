@@ -6,7 +6,7 @@
                 <h3 id="log-modal-heading" class="text-[15px] font-bold text-gray-900">
                     Log Production{{ $schedule ? " — {$schedule->product_sku} · {$schedule->productionLine?->name}" : '' }}
                 </h3>
-                <button type="button" wire:click="closeModal" aria-label="Close log production dialog" class="text-base text-gray-400 hover:text-gray-600">✕</button>
+                <button type="button" wire:click="closeModal" aria-label="Close log production dialog" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><x-heroicon-o-x-mark class="size-5" aria-hidden="true" /></button>
             </div>
             <div class="px-5 py-[18px]">
                 @if ($schedule === null)

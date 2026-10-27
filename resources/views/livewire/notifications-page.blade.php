@@ -12,20 +12,24 @@
 @endphp
 
 <div class="flex flex-col gap-6">
-    <header class="flex flex-wrap items-end justify-between gap-3">
-        <div>
-            <h1 class="text-[21px] font-extrabold tracking-tight text-gray-900">Notifications</h1>
-            <p class="mt-1 text-[13px] text-gray-500">{{ $unreadCount }} unread</p>
-        </div>
-        <div class="flex items-center gap-3">
-            @if ($unreadCount > 0)
-                <button type="button" wire:click="markAllAsRead" class="text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline">Mark all as read</button>
-            @endif
-            @if ($hasReadNotifications)
-                <button type="button" wire:click="clearRead" wire:confirm="Delete all read notifications?" class="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Clear read</button>
-            @endif
-        </div>
-    </header>
+    <x-page-header title="Notifications" :subtitle="$unreadCount.' unread'">
+        @if ($unreadCount > 0 || $hasReadNotifications)
+            <x-slot:actions>
+                @if ($unreadCount > 0)
+                    <button type="button" wire:click="markAllAsRead" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
+                        <x-heroicon-o-check class="size-4" aria-hidden="true" />
+                        Mark all as read
+                    </button>
+                @endif
+                @if ($hasReadNotifications)
+                    <button type="button" wire:click="clearRead" wire:confirm="Delete all read notifications?" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
+                        <x-heroicon-o-trash class="size-4" aria-hidden="true" />
+                        Clear read
+                    </button>
+                @endif
+            </x-slot:actions>
+        @endif
+    </x-page-header>
 
     <section aria-labelledby="notifications-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
         <h2 id="notifications-heading" class="sr-only">Notification list</h2>
@@ -84,7 +88,7 @@
                     </div>
                 </li>
             @empty
-                <li class="px-[18px] py-10 text-center text-sm text-gray-500">No notifications match these filters.</li>
+                <li><x-empty-state key="notifications" icon="bell" :filtered="$readFilter !== 'all' || $severityFilter !== ''" /></li>
             @endforelse
         </ul>
 

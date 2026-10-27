@@ -71,6 +71,25 @@ class NotificationsTest extends TestCase
         );
     }
 
+    public function test_selling_the_last_unit_sends_a_critical_out_of_stock_notification(): void
+    {
+        $recipient = $this->userWithRole('inventory-staff');
+        $stock = $this->createStock(threshold: 100, level: 30);
+
+        app(StockService::class)->applyMovement($stock, 'sale', -30, null, null, null);
+
+        $notification = $recipient->notifications()->sole();
+        $this->assertSame('stock:'.$stock->product_id.':out', $notification->data['key']);
+        $this->assertSame('critical', $notification->data['severity']);
+        $this->assertSame('Test water is out of stock', $notification->data['title']);
+
+        app(SettingsService::class)->set('notify.critical_stock', false, $this->userWithRole('administrator'));
+        $otherStock = $this->createStock(threshold: 100, level: 10);
+        app(StockService::class)->applyMovement($otherStock, 'sale', -10, null, null, null);
+
+        $this->assertSame(1, $recipient->notifications()->count());
+    }
+
     public function test_stock_notifications_are_scoped_to_roles_with_inventory_access(): void
     {
         $administrator = $this->userWithRole('administrator');
@@ -170,7 +189,11 @@ class NotificationsTest extends TestCase
         ]);
         $this->actingAs($actor);
 
-        Livewire::test(ProductionRuns::class)->call('completeRun', $run->id);
+        Livewire::test(ProductionRuns::class)
+            ->call('completeRun', $run->id)
+            ->set('rawWaterVolume', '1000')
+            ->set('meteredBottledVolume', '850')
+            ->call('finishCompletion');
 
         $this->assertSame('production.below_target', $productionManager->notifications()->sole()->data['type']);
         $this->assertSame(0, $actor->notifications()->count());

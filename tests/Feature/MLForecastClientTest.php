@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\ProductionBatch;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\Forecasting\ForecastStatus;
 use App\Services\MLForecastClient;
 use Carbon\CarbonImmutable;
 use Database\Seeders\RoleSeeder;
@@ -175,6 +176,82 @@ class MLForecastClientTest extends TestCase
 
         $this->assertNull($prediction);
         $this->assertDatabaseCount('forecast_records', 0);
+    }
+
+    public function test_forecast_explains_missing_covered_days_with_their_dates(): void
+    {
+        $target = CarbonImmutable::parse('2026-10-04');
+        $this->createSkuHistory('1L', $target);
+        DailySkuFeature::query()->whereIn('date', ['2026-09-25', '2026-09-26'])->update(['sales_data_covered' => false]);
+
+        $outcome = app(MLForecastClient::class)->forecast('1L', $target->toDateString());
+
+        $this->assertSame(ForecastStatus::MissingCoveredDays, $outcome->status);
+        $this->assertSame(['2026-09-25', '2026-09-26'], $outcome->missingDates);
+        $this->assertSame('Missing 2 of 14 covered days before 04 Oct 2026: 25 Sep 2026, 26 Sep 2026. Confirm sales coverage for these days.', $outcome->message());
+        Http::assertNothingSent();
+
+        DailySkuFeature::query()->update(['sales_data_covered' => false]);
+
+        $this->assertSame(
+            'No confirmed sales coverage for the 14 days before 04 Oct 2026. The model needs all of them.',
+            app(MLForecastClient::class)->forecast('1L', $target->toDateString())->message(),
+        );
+    }
+
+    public function test_forecast_explains_missing_target_day_context(): void
+    {
+        $target = CarbonImmutable::parse('2026-10-04');
+        $this->createSkuHistory('1L', $target);
+        DailySkuFeature::query()->where('date', $target->toDateString())->update(['temperature_c' => null]);
+
+        $outcome = app(MLForecastClient::class)->forecast('1L', $target->toDateString());
+
+        $this->assertSame(ForecastStatus::MissingContext, $outcome->status);
+        $this->assertSame('No promotion, holiday, school-term and temperature context for 04 Oct 2026.', $outcome->message());
+    }
+
+    public function test_forecast_distinguishes_unreachable_service_from_missing_sku_model(): void
+    {
+        $target = CarbonImmutable::parse('2026-10-04');
+        $this->createSkuHistory('1L', $target);
+        Http::fakeSequence('ml-forecast.test/predict')
+            ->pushFailedConnection()
+            ->push(['detail' => 'No trained model is available for this SKU'], 503)
+            ->push(['detail' => 'The model could not score this request'], 503);
+
+        $client = app(MLForecastClient::class);
+
+        $unreachable = $client->forecast('1L', '2026-10-04');
+        $noModel = $client->forecast('1L', '2026-10-04');
+        $serviceError = $client->forecast('1L', '2026-10-04');
+
+        $this->assertSame(ForecastStatus::ServiceUnreachable, $unreachable->status);
+        $this->assertSame('The ML service is unreachable at http://ml-forecast.test.', $unreachable->message());
+        $this->assertSame(ForecastStatus::NoModelForSku, $noModel->status);
+        $this->assertSame('The ML service has no trained model for 1L.', $noModel->message());
+        $this->assertSame(ForecastStatus::ServiceError, $serviceError->status);
+        $this->assertSame('The ML service could not score this request (HTTP 503).', $serviceError->message());
+    }
+
+    public function test_health_reports_reachability_and_served_versions_once_per_request(): void
+    {
+        Http::fake(['ml-forecast.test/health' => Http::response(['status' => 'ok', 'models' => ['1L' => '2026-10-01']])]);
+        $client = app(MLForecastClient::class);
+
+        $this->assertSame(['reachable' => true, 'models' => ['1L' => '2026-10-01'], 'error' => null], $client->health());
+        $client->health();
+        Http::assertSentCount(1);
+    }
+
+    public function test_health_explains_an_outdated_service_without_the_health_endpoint(): void
+    {
+        Http::fake(['ml-forecast.test/health' => Http::response(['detail' => 'Not Found'], 404)]);
+
+        $health = app(MLForecastClient::class)->health();
+
+        $this->assertFalse($health['reachable']);
+        $this->assertSame('The ML service is running an older version without a health check. Restart it to load the latest code.', $health['error']);
     }
 
     private function createSkuHistory(string $sku, CarbonImmutable $target): void

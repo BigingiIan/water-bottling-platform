@@ -100,30 +100,41 @@ class ProductionRunTransitionsTest extends TestCase
         $schedule = $this->createSchedule('1L', '10:30:00', 2500, 'active');
         $this->createLog($schedule);
 
-        Livewire::test(ProductionRuns::class)
-            ->call('completeRun', $schedule->id)
-            ->assertHasNoErrors();
-
-        $this->assertSame('complete', $schedule->fresh()->status);
-    }
-
-    public function test_complete_without_logs_requires_confirmation(): void
-    {
-        $schedule = $this->createSchedule('1L', '10:30:00', 2500, 'active');
-
         $component = Livewire::test(ProductionRuns::class)
             ->call('completeRun', $schedule->id)
             ->assertHasNoErrors()
-            ->assertSet('confirmingCompletion', $schedule->id);
+            ->assertSet('completingRunId', $schedule->id)
+            ->assertSee('Raw water used (L)');
 
-        $this->assertSame('active', $schedule->fresh()->status);
+        $this->assertSame('active', $schedule->fresh()->status, 'Opening the dialog does not complete the run.');
 
         $component
-            ->call('completeRun', $schedule->id)
+            ->set('rawWaterVolume', '1000')
+            ->set('meteredBottledVolume', '980')
+            ->call('finishCompletion')
             ->assertHasNoErrors()
-            ->assertSet('confirmingCompletion', null);
+            ->assertSet('completingRunId', null);
 
         $this->assertSame('complete', $schedule->fresh()->status);
+        $this->assertDatabaseHas('production_batches', [
+            'production_schedule_id' => $schedule->id,
+            'raw_water_volume' => 1000,
+            'bottled_volume' => 980,
+            'status' => 'completed',
+        ]);
+    }
+
+    public function test_complete_requires_volumes_and_warns_when_nothing_was_logged(): void
+    {
+        $schedule = $this->createSchedule('1L', '10:30:00', 2500, 'active');
+
+        Livewire::test(ProductionRuns::class)
+            ->call('completeRun', $schedule->id)
+            ->assertSee('No production has been logged on this run')
+            ->call('finishCompletion')
+            ->assertHasErrors(['rawWaterVolume' => 'required', 'meteredBottledVolume' => 'required']);
+
+        $this->assertSame('active', $schedule->fresh()->status);
     }
 
     public function test_complete_is_rejected_for_non_active_runs(): void
@@ -187,6 +198,9 @@ class ProductionRunTransitionsTest extends TestCase
             ->call('selectRun', $schedule->id)
             ->assertSee('Log production on this run')
             ->call('completeRun', $schedule->id)
+            ->set('rawWaterVolume', '1000')
+            ->set('meteredBottledVolume', '980')
+            ->call('finishCompletion')
             ->assertDontSee('Log production on this run');
     }
 }

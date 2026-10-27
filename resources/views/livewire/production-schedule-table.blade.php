@@ -3,7 +3,7 @@
         <div class="rounded-lg border border-gray-200 bg-white px-[18px] py-4">
             <div class="mb-2.5 flex items-center justify-between">
                 <p class="text-[11.5px] font-bold uppercase tracking-[0.4px] text-gray-500">Today's Output</p>
-                <span class="flex size-[26px] items-center justify-center rounded-md bg-blue-50 text-[13px]" aria-hidden="true">📦</span>
+                <span class="flex size-[26px] items-center justify-center rounded-md bg-blue-50 text-blue-600" aria-hidden="true"><x-heroicon-o-cube class="size-4" /></span>
             </div>
             <p class="text-2xl font-extrabold text-gray-900">
                 {{ number_format($kpis['output']) }}
@@ -17,7 +17,7 @@
         <div class="rounded-lg border border-gray-200 bg-white px-[18px] py-4">
             <div class="mb-2.5 flex items-center justify-between">
                 <p class="text-[11.5px] font-bold uppercase tracking-[0.4px] text-gray-500">Jobs Completed</p>
-                <span class="flex size-[26px] items-center justify-center rounded-md bg-green-50 text-[13px]" aria-hidden="true">✓</span>
+                <span class="flex size-[26px] items-center justify-center rounded-md bg-green-50 text-green-600" aria-hidden="true"><x-heroicon-o-check-circle class="size-4" /></span>
             </div>
             <p class="text-2xl font-extrabold text-gray-900">
                 {{ $kpis['completed'] }}
@@ -33,7 +33,7 @@
         <div class="rounded-lg border border-gray-200 bg-white px-[18px] py-4">
             <div class="mb-2.5 flex items-center justify-between">
                 <p class="text-[11.5px] font-bold uppercase tracking-[0.4px] text-gray-500">Active Lines</p>
-                <span class="flex size-[26px] items-center justify-center rounded-md bg-teal-50 text-[13px]" aria-hidden="true">⚙</span>
+                <span class="flex size-[26px] items-center justify-center rounded-md bg-teal-50 text-teal-600" aria-hidden="true"><x-heroicon-o-bolt class="size-4" /></span>
             </div>
             <p class="text-2xl font-extrabold text-gray-900">
                 {{ $kpis['activeLines'] }}
@@ -50,7 +50,7 @@
         <div class="rounded-lg border border-gray-200 bg-white px-[18px] py-4">
             <div class="mb-2.5 flex items-center justify-between">
                 <p class="text-[11.5px] font-bold uppercase tracking-[0.4px] text-gray-500">Forecast vs Actual</p>
-                <span class="flex size-[26px] items-center justify-center rounded-md bg-amber-50 text-[13px]" aria-hidden="true">📈</span>
+                <span class="flex size-[26px] items-center justify-center rounded-md bg-amber-50 text-amber-600" aria-hidden="true"><x-heroicon-o-presentation-chart-line class="size-4" /></span>
             </div>
             @if ($forecastComparison !== null && $forecastComparison['available'])
                 <p class="text-2xl font-extrabold text-gray-900">
@@ -67,7 +67,7 @@
     </div>
 
     <section aria-labelledby="schedule-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white">
-        <h2 id="schedule-heading" class="sr-only">Production schedule for {{ $this->selectedDate }}</h2>
+        <h2 id="schedule-heading" class="sr-only">Production schedule for {{ app(\App\Support\SettingsDate::class)->formatDate($this->selectedDate) }}</h2>
 
         @if ($forecastComparison !== null && $forecastComparison['available'])
             <div @class([
@@ -75,7 +75,7 @@
                 'border-amber-200 bg-amber-50 text-amber-900' => $forecastComparison['isBelow'],
                 'bg-blue-50 text-[#1d4ed8]' => ! $forecastComparison['isBelow'],
             ])>
-                <span aria-hidden="true">📈</span>
+                <x-heroicon-o-presentation-chart-line class="size-5 shrink-0" aria-hidden="true" />
                 <p>
                     <b class="font-bold">ML Demand Forecast</b>
                     — suggested production for {{ $forecastComparison['sku'] }} is
@@ -88,12 +88,12 @@
                         {{ number_format($forecastComparison['shortfall']) }} units ({{ number_format($forecastComparison['shortfallPct'], 1) }}%) below forecast
                     </span>
                 @else
-                    <span class="ml-auto shrink-0 font-semibold">Covers forecast ✓</span>
+                    <span class="ml-auto inline-flex shrink-0 items-center gap-1 font-semibold">Covers forecast <x-heroicon-o-check-circle class="size-4" aria-hidden="true" /></span>
                 @endif
             </div>
         @elseif ($forecastComparison !== null)
             <div class="flex items-center gap-2.5 border-b border-amber-200 bg-amber-50 px-[18px] py-3 text-[12.5px] text-amber-900" role="status">
-                <span aria-hidden="true">⚠</span>
+                <x-heroicon-o-exclamation-triangle class="size-5 shrink-0" aria-hidden="true" />
                 <p>
                     <b class="font-bold">Forecast unavailable for {{ $forecastComparison['sku'] }}.</b>
                     The forecast client did not return a prediction for this SKU and date — this usually means
@@ -133,7 +133,7 @@
                 <option value="active">Status: Active</option>
                 <option value="complete">Status: Complete</option>
             </select>
-            <p class="ml-auto text-xs text-gray-500">{{ $schedules->count() }} jobs · {{ number_format($totalActual) }} / {{ number_format($totalTarget) }} units</p>
+            <p class="ml-auto text-xs text-gray-500">{{ \App\Support\Plural::count($schedules->count(), 'job') }} · {{ number_format($totalActual) }} / {{ number_format($totalTarget) }} units</p>
         </div>
 
         <div class="overflow-x-auto">

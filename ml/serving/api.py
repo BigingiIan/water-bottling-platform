@@ -317,6 +317,19 @@ app = FastAPI(
 )
 
 
+@app.get("/health")
+def health(request: Request) -> dict[str, Any]:
+    models: dict[str, ModelBundle | ForecastBundle] = request.app.state.models
+    served_versions: dict[str, str] = {}
+
+    for sku, bundle in sorted(models.items()):
+        model_version = bundle.manifest.get("model_version")
+        if isinstance(model_version, str) and model_version.strip() and len(model_version) <= 255:
+            served_versions[sku] = model_version
+
+    return {"status": "ok", "models": served_versions}
+
+
 @app.post("/predict")
 def predict(payload: PredictionRequest, request: Request) -> dict[str, str | float]:
     models: dict[str, ModelBundle | ForecastBundle] = request.app.state.models

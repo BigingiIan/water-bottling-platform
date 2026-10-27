@@ -1,20 +1,30 @@
+@php
+    $canSendRequests = app(\App\Services\Requests\RequestAccess::class)->canSendRequests(auth()->user());
+    $hasStockActions = $canWriteInventory || $canSendRequests;
+@endphp
 <div class="flex flex-col gap-6">
     @if (session('inventorySuccess'))
         <p role="status" class="rounded-md border border-green-200 bg-green-50 px-4 py-2.5 text-sm font-medium text-green-800">{{ session('inventorySuccess') }}</p>
     @endif
 
-    <header class="flex flex-wrap items-end justify-between gap-3">
-        <div>
-            <h1 class="text-[21px] font-extrabold tracking-tight text-gray-900">Inventory</h1>
-            <p class="mt-1 text-[13px] text-gray-500">Production, leakage, and stock activity.</p>
-        </div>
+    <x-page-header help="inventory" title="Inventory" subtitle="Production, leakage, and stock activity.">
         @if ($canWriteInventory && $activeTab === 'stock')
-            <div class="flex gap-2">
-                <button type="button" wire:click="openAdjustmentModal" class="rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">Adjust Stock</button>
-                <button type="button" wire:click="openStockInModal" class="rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700">+ Record Stock-In</button>
-            </div>
+            <x-slot:actions>
+                <button type="button" wire:click="openStockCountModal" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
+                    <x-heroicon-o-clipboard-document-check class="size-4" aria-hidden="true" />
+                    Record stock count
+                </button>
+                <button type="button" wire:click="openAdjustmentModal" class="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50">
+                    <x-heroicon-o-adjustments-horizontal class="size-4" aria-hidden="true" />
+                    Adjust Stock
+                </button>
+                <button type="button" wire:click="openStockInModal" class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700">
+                    <x-heroicon-o-plus class="size-4" aria-hidden="true" />
+                    Record Stock-In
+                </button>
+            </x-slot:actions>
         @endif
-    </header>
+    </x-page-header>
 
     <nav aria-label="Inventory sections" class="flex flex-wrap gap-1 border-b border-gray-200">
         <button type="button" wire:click="$set('activeTab', 'stock')" @class(['border-b-2 px-3 py-2.5 text-[13px] font-semibold', 'border-blue-600 text-blue-700' => $activeTab === 'stock', 'border-transparent text-gray-500 hover:text-gray-800' => $activeTab !== 'stock']) @if ($activeTab === 'stock') aria-current="page" @endif>Stock Overview</button>
@@ -37,18 +47,8 @@
             @php
                 $product = $card['product'];
                 $status = $card['status'];
-                $badgeClass = match ($status) {
-                    'critical' => 'bg-red-50 text-[#b91c1c]',
-                    'low' => 'bg-amber-50 text-[#b45309]',
-                    default => 'bg-green-50 text-[#15803d]',
-                };
-                $dotClass = match ($status) {
-                    'critical' => 'bg-red-500',
-                    'low' => 'bg-amber-500',
-                    default => 'bg-green-500',
-                };
                 $coverFillClass = match ($status) {
-                    'critical' => 'bg-red-500',
+                    'out', 'critical' => 'bg-red-500',
                     'low' => 'bg-amber-500',
                     default => 'bg-green-500',
                 };
@@ -56,15 +56,13 @@
             @endphp
             <article @class([
                 'min-w-0 rounded-lg border bg-white p-4',
-                'border-red-500' => $status === 'critical',
+                'border-red-500' => in_array($status, ['critical', 'out'], true),
                 'border-amber-500' => $status === 'low',
                 'border-gray-200' => $status === 'ok',
             ])>
                 <div class="mb-2.5 flex items-center justify-between gap-2">
                     <span class="rounded bg-teal-50 px-2.5 py-[3px] text-[11px] font-bold text-[#0f766e]">{{ $product->unit_type }}</span>
-                    <span class="inline-flex items-center gap-[5px] rounded-full px-[9px] py-[3px] text-[11px] font-bold {{ $badgeClass }}">
-                        <span aria-hidden="true" class="size-1.5 rounded-full {{ $dotClass }}"></span>{{ ucfirst($status) }}
-                    </span>
+                    <x-stock-status-badge :status="$status" />
                 </div>
                 <h2 class="truncate text-sm font-semibold text-gray-700">{{ $product->name }}</h2>
                 <p class="mt-1 text-2xl font-extrabold tabular-nums text-gray-900">
@@ -120,8 +118,9 @@
                 <option value="ok">OK</option>
                 <option value="low">Low</option>
                 <option value="critical">Critical</option>
+                <option value="out">Out of stock</option>
             </select>
-            <span class="ml-auto text-xs text-gray-500">{{ $stockLines->count() }} stock lines</span>
+            <span class="ml-auto text-xs text-gray-500">{{ \App\Support\Plural::count($stockLines->count(), 'stock line') }}</span>
         </form>
         <div class="overflow-x-auto">
             <table class="w-full min-w-[800px] border-collapse text-left">
@@ -134,7 +133,7 @@
                         <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Level / minimum</th>
                         <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Status</th>
                         <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Last updated</th>
-                        @if ($canWriteInventory)
+                        @if ($hasStockActions)
                             <th scope="col" class="border-b border-gray-200 px-[18px] py-2.5"><span class="sr-only">Actions</span></th>
                         @endif
                     </tr>
@@ -148,16 +147,6 @@
                             $lineFill = min(100, $lineLevel / $lineScale * 100);
                             $minimumMark = min(100, $lineMinimum / $lineScale * 100);
                             $status = $statusByProduct[$stockLine->product_id]['status'] ?? 'ok';
-                            $badgeClass = match ($status) {
-                                'critical' => 'bg-red-50 text-[#b91c1c]',
-                                'low' => 'bg-amber-50 text-[#b45309]',
-                                default => 'bg-green-50 text-[#15803d]',
-                            };
-                            $dotClass = match ($status) {
-                                'critical' => 'bg-red-500',
-                                'low' => 'bg-amber-500',
-                                default => 'bg-green-500',
-                            };
                         @endphp
                         <tr wire:key="stock-line-{{ $stockLine->id }}" class="transition-colors hover:bg-gray-50">
                             <td class="border-b border-gray-100 px-[18px] py-3">
@@ -175,19 +164,24 @@
                                 </div>
                             </td>
                             <td class="border-b border-gray-100 px-[18px] py-3">
-                                <span class="inline-flex items-center gap-[5px] rounded-full px-[9px] py-[3px] text-[11px] font-bold {{ $badgeClass }}">
-                                    <span aria-hidden="true" class="size-1.5 rounded-full {{ $dotClass }}"></span>{{ ucfirst($status) }}
-                                </span>
+                                <x-stock-status-badge :status="$status" />
                             </td>
                             <td class="border-b border-gray-100 px-[18px] py-3 text-xs text-gray-500">{{ app(\App\Support\SettingsDate::class)->formatDateTime($stockLine->last_updated) }}</td>
-                            @if ($canWriteInventory)
+                            @if ($hasStockActions)
                                 <td class="border-b border-gray-100 px-[18px] py-3 text-right">
-                                    <button type="button" wire:click="openAdjustmentModal({{ $stockLine->id }})" class="rounded-md px-2.5 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100">Adjust</button>
+                                    <div class="flex items-center justify-end gap-1.5">
+                                        @if ($canWriteInventory)
+                                            <button type="button" wire:click="openAdjustmentModal({{ $stockLine->id }})" class="rounded-md px-2.5 py-1 text-xs font-semibold text-gray-600 hover:bg-gray-100">Adjust</button>
+                                        @endif
+                                        @if ($canSendRequests)
+                                            <x-send-request-button related-type="stock_line" :related-id="$stockLine->id" compact label="Send request about this stock line" />
+                                        @endif
+                                    </div>
                                 </td>
                             @endif
                         </tr>
                     @empty
-                        <tr><td colspan="{{ $canWriteInventory ? 7 : 6 }}" class="px-4 py-8 text-center text-sm text-gray-500">No stock lines match these filters.</td></tr>
+                        <tr><td colspan="{{ $hasStockActions ? 7 : 6 }}"><x-empty-state key="stock_lines" icon="archive-box" :filtered="$productFilter !== '' || $locationFilter !== '' || $statusFilter !== ''" :can="$canWriteInventory" action-click="openStockInModal" /></td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -203,7 +197,7 @@
             @forelse ($attentionProducts as $card)
                 @php
                     $product = $card['product'];
-                    $critical = $card['status'] === 'critical';
+                    $critical = in_array($card['status'], ['critical', 'out'], true);
                     $suggestedUnits = $card['forecastDemand'] !== null
                         ? (int) (ceil($card['forecastDemand'] / 10) * 10)
                         : null;
@@ -211,14 +205,14 @@
                 <article wire:key="attention-{{ $product->id }}" class="flex items-start gap-3 border-b border-gray-100 px-[18px] py-3.5 last:border-b-0">
                     <span aria-hidden="true" class="mt-1.5 size-[7px] shrink-0 rounded-full {{ $critical ? 'bg-red-500' : 'bg-amber-500' }}"></span>
                     <div class="min-w-0 flex-1">
-                        <p class="text-[12.5px] text-gray-700"><strong class="text-gray-900">{{ $product->unit_type }}</strong> · {{ $card['coverWarning'] && $card['status'] === 'ok' ? 'Low forecast cover' : ucfirst($card['status']) }} at {{ number_format($card['totalUnits']) }} units</p>
+                        <p class="text-[12.5px] text-gray-700"><strong class="text-gray-900">{{ $product->unit_type }}</strong> · {{ $card['coverWarning'] && $card['status'] === 'ok' ? 'Low forecast cover' : match ($card['status']) { 'out' => 'Out of stock', 'critical' => 'Critical', default => 'Low' } }} at {{ \App\Support\Plural::count($card['totalUnits'], 'unit') }}</p>
                         <p class="mt-0.5 text-[11px] text-gray-500">
                             Cover: {{ ! $forecastEnabled ? 'Disabled in Settings' : ($card['coverDays'] === null ? 'No forecast' : number_format($card['coverDays'], 1).' days') }}
                             @if ($forecastEnabled)
                                 · Suggested run: {{ $suggestedUnits === null ? 'No forecast' : number_format($suggestedUnits).' units' }}
                             @endif
                         </p>
-                        <a href="{{ route('production.schedule', ['sku' => $product->unit_type]) }}" class="mt-1.5 inline-flex text-xs font-semibold text-blue-700 hover:text-blue-800">Plan a run <span aria-hidden="true" class="ml-1">→</span></a>
+                        <a href="{{ route('production.schedule', ['sku' => $product->unit_type]) }}" class="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-800">Plan a run <x-heroicon-o-arrow-right class="size-3.5" aria-hidden="true" /></a>
                     </div>
                 </article>
             @empty
@@ -233,7 +227,7 @@
             </div>
             @forelse ($recentMovements as $movement)
                 <article wire:key="movement-{{ $movement->id }}" class="flex items-start gap-3 border-b border-gray-100 px-[18px] py-3.5 last:border-b-0">
-                    <span aria-hidden="true" class="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full {{ $movement->quantity_change < 0 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700' }}">{{ $movement->quantity_change < 0 ? '−' : '+' }}</span>
+                    <span aria-hidden="true" class="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full {{ $movement->quantity_change < 0 ? 'bg-amber-50 text-amber-700' : 'bg-green-50 text-green-700' }}">@if ($movement->quantity_change < 0)<x-heroicon-o-minus class="size-4" />@else<x-heroicon-o-plus class="size-4" />@endif</span>
                     <div class="min-w-0 flex-1">
                         <p class="text-[12.5px] text-gray-700"><strong class="text-gray-900">{{ $movement->product?->unit_type ?? 'Product' }}</strong> · {{ str_replace('_', ' ', ucfirst($movement->type)) }}</p>
                         <p class="mt-0.5 text-[11px] text-gray-500">
@@ -281,6 +275,9 @@
                             <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Yield</th>
                             <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Status</th>
                             <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Operator</th>
+                            @if ($canSendRequests)
+                                <th scope="col" class="px-[18px] py-2.5"><span class="sr-only">Actions</span></th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody>
@@ -303,9 +300,14 @@
                                 <td class="px-[18px] py-3 tabular-nums">{{ number_format($yieldPercent, 1) }}%</td>
                                 <td class="px-[18px] py-3"><span class="rounded-full px-2.5 py-1 text-[11px] font-bold {{ $batchBadgeClass }}">{{ str_replace('_', ' ', ucfirst($batch->status)) }}</span></td>
                                 <td class="px-[18px] py-3">{{ $batch->user?->name ?? '—' }}</td>
+                                @if ($canSendRequests)
+                                    <td class="px-[18px] py-3 text-right">
+                                        <x-send-request-button related-type="batch" :related-id="$batch->id" compact label="Send request about batch B-{{ str_pad((string) $batch->id, 5, '0', STR_PAD_LEFT) }}" />
+                                    </td>
+                                @endif
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="px-4 py-8 text-center text-sm text-gray-500">No batches match these filters.</td></tr>
+                            <tr><td colspan="{{ $canSendRequests ? 7 : 6 }}"><x-empty-state key="batches" icon="cube" :filtered="$batchStatus !== ''" /></td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -313,36 +315,78 @@
             <div class="border-t border-gray-100 px-[18px] py-3">{{ $batchRows->links() }}</div>
         </section>
     @elseif ($activeTab === 'leakage')
+        <section aria-labelledby="loss-trend-heading" class="rounded-lg border border-gray-200 bg-white p-[18px]">
+            <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <div>
+                    <h2 id="loss-trend-heading" class="text-sm font-bold text-gray-900">Process loss trend</h2>
+                    <p class="mt-0.5 text-xs text-gray-500">Loss beyond the normal process loss, per product, last 30 completed batches.</p>
+                </div>
+                <p class="flex items-center gap-3 text-[11px] text-gray-500">
+                    <span class="inline-flex items-center gap-1.5"><svg width="16" height="6" aria-hidden="true"><line x1="1" y1="3" x2="15" y2="3" stroke="#94a3b8" stroke-width="1" /></svg>0% = normal loss ({{ number_format($normalLossPercent, 1) }}%)</span>
+                    <span class="inline-flex items-center gap-1.5"><svg width="16" height="6" aria-hidden="true"><line x1="1" y1="3" x2="15" y2="3" stroke="#d97706" stroke-width="1" stroke-dasharray="3 3" /></svg>Review at {{ number_format($reviewPercent, 1) }}% beyond normal</span>
+                </p>
+            </div>
+            @if ($lossTrends->isEmpty())
+                <p class="mt-3 text-sm text-gray-500">Loss trends appear once production runs are completed with their water volumes.</p>
+            @else
+                <ul class="mt-3 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                    @foreach ($lossTrends as $sku => $values)
+                        <li wire:key="loss-trend-{{ $sku }}" class="min-w-0">
+                            <p class="flex items-baseline justify-between text-xs"><span class="font-bold text-gray-800">{{ $sku }}</span><span class="tabular-nums text-gray-500">latest +{{ number_format(end($values), 1) }}% · {{ \App\Support\Plural::count(count($values), 'batch') }}</span></p>
+                            <x-loss-sparkline :values="$values" :label="$sku" :normal="$normalLossPercent" :review="$reviewPercent" class="mt-1" />
+                        </li>
+                    @endforeach
+                </ul>
+            @endif
+        </section>
+
         <section aria-labelledby="leakage-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white">
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-[18px] py-3.5">
                 <div>
                     <h2 id="leakage-heading" class="text-sm font-bold text-gray-900">Leakage reports</h2>
-                    <p class="mt-0.5 text-xs text-gray-500">Discrepancy is calculated from expected and actual volumes.</p>
+                    <p class="mt-0.5 text-xs text-gray-500">Entered by hand, raised when a run is completed (process loss), or raised by a stock count (shrinkage).</p>
                 </div>
                 @if ($canWriteInventory)
-                    <button type="button" wire:click="openLeakageReportModal" class="rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700">+ New Report</button>
+                    <button type="button" wire:click="openLeakageReportModal" class="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700"><x-heroicon-o-plus class="size-4" aria-hidden="true" />New Report</button>
                 @endif
             </div>
             <div class="flex flex-wrap items-center gap-2 border-b border-gray-100 bg-gray-50 px-[18px] py-3">
-                <label for="leakage-flag-filter" class="sr-only">Filter by leakage flag</label>
+                <label for="leakage-flag-filter" class="sr-only">Filter by severity</label>
                 <select id="leakage-flag-filter" wire:model.live="leakageFlagFilter" class="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700">
-                    <option value="">All flags</option>
+                    <option value="">All severities</option>
                     <option value="Normal">Normal</option>
                     <option value="Review">Review</option>
                     <option value="Investigate">Investigate</option>
                 </select>
-                <span class="ml-auto text-xs text-gray-500">{{ $leakageReports->total() }} reports</span>
+                <label for="leakage-source-filter" class="sr-only">Filter by source</label>
+                <select id="leakage-source-filter" wire:model.live="leakageSourceFilter" class="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700">
+                    <option value="">All sources</option>
+                    <option value="manual">Manual</option>
+                    <option value="process">Process loss</option>
+                    <option value="stock">Stock count</option>
+                </select>
+                <label for="leakage-status-filter" class="sr-only">Filter by status</label>
+                <select id="leakage-status-filter" wire:model.live="leakageStatusFilter" class="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700">
+                    <option value="">All statuses</option>
+                    <option value="open">Open</option>
+                    <option value="acknowledged">Acknowledged</option>
+                    <option value="resolved">Resolved</option>
+                </select>
+                <span class="ml-auto text-xs text-gray-500">{{ \App\Support\Plural::count($leakageReports->total(), 'report') }}</span>
             </div>
             <div class="overflow-x-auto">
-                <table class="w-full min-w-[800px] border-collapse text-left">
+                <table class="w-full min-w-[1080px] border-collapse text-left">
+                    <caption class="sr-only">Leakage reports with source, loss percentage, severity, status, and explanation.</caption>
                     <thead class="bg-gray-50">
                         <tr>
-                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Report date / batch</th>
-                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Expected</th>
-                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Actual</th>
-                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Discrepancy</th>
-                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Percentage</th>
+                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Date / subject</th>
+                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Source</th>
+                            <th scope="col" class="px-[18px] py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Loss</th>
+                            <th scope="col" class="px-[18px] py-2.5 text-right text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">z</th>
                             <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Flag</th>
+                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Status</th>
+                            <th scope="col" class="px-[18px] py-2.5 text-[11px] font-bold uppercase tracking-[0.4px] text-gray-500">Explanation</th>
+                            <th scope="col" class="px-[18px] py-2.5"><span class="sr-only">Actions</span></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -354,26 +398,83 @@
                                     'Review' => 'bg-amber-50 text-[#b45309]',
                                     default => 'bg-green-50 text-[#15803d]',
                                 };
-                                $percentage = (float) $report->expected_volume > 0
-                                    ? abs((float) $report->discrepancy) / (float) $report->expected_volume * 100
-                                    : 0;
+                                $statusClass = match ($report->status) {
+                                    'resolved' => 'bg-green-50 text-[#15803d]',
+                                    'acknowledged' => 'bg-blue-50 text-[#1d4ed8]',
+                                    default => 'bg-gray-100 text-gray-700',
+                                };
+                                $sourceLabel = match ($report->finding) {
+                                    'process_loss' => 'Process loss',
+                                    'logging_gap' => 'Logging gap',
+                                    'stock_shrinkage' => 'Stock shrinkage',
+                                    default => 'Manual',
+                                };
+                                $subject = $report->batch_id !== null
+                                    ? 'B-'.str_pad((string) $report->batch_id, 5, '0', STR_PAD_LEFT)
+                                    : trim(($report->product?->unit_type ?? '').' '.($report->warehouse_location ? '@ '.$report->warehouse_location : ''));
                             @endphp
-                            <tr wire:key="leakage-report-{{ $report->id }}" class="border-t border-gray-100 text-[13px] text-gray-700">
-                                <td class="px-[18px] py-3"><span class="font-medium text-gray-900">{{ app(\App\Support\SettingsDate::class)->formatDate($report->report_date) }}</span><span class="mt-0.5 block font-mono text-[11px] text-gray-500">B-{{ str_pad((string) $report->batch_id, 5, '0', STR_PAD_LEFT) }}</span></td>
-                                <td class="px-[18px] py-3 tabular-nums">{{ number_format((float) $report->expected_volume, 2) }} L</td>
-                                <td class="px-[18px] py-3 tabular-nums">{{ number_format((float) $report->actual_volume, 2) }} L</td>
-                                <td class="px-[18px] py-3 font-mono tabular-nums {{ (float) $report->discrepancy < 0 ? 'text-red-700' : 'text-green-700' }}">{{ number_format((float) $report->discrepancy, 2) }} L</td>
-                                <td class="px-[18px] py-3 tabular-nums">{{ number_format($percentage, 2) }}%</td>
-                                <td class="px-[18px] py-3"><span class="rounded-full px-2.5 py-1 text-[11px] font-bold {{ $flagClass }}">{{ $flag }}</span></td>
+                            <tr wire:key="leakage-report-{{ $report->id }}" class="border-t border-gray-100 align-top text-[13px] text-gray-700">
+                                <td class="px-[18px] py-3">
+                                    <span class="font-medium text-gray-900">{{ app(\App\Support\SettingsDate::class)->formatDate($report->report_date) }}</span>
+                                    <span class="mt-0.5 block font-mono text-[11px] text-gray-500">{{ $subject }}{{ $report->product && $report->batch_id ? ' · '.$report->product->unit_type : '' }}</span>
+                                </td>
+                                <td class="px-[18px] py-3">
+                                    <span class="whitespace-nowrap font-medium text-gray-800">{{ $sourceLabel }}</span>
+                                    @if ($report->detected_by === 'anomaly')
+                                        <span class="mt-1 block w-fit rounded-full bg-purple-100 px-2 py-0.5 text-[10.5px] font-bold text-[#7e22ce]">Unusual</span>
+                                    @endif
+                                </td>
+                                <td class="px-[18px] py-3 text-right tabular-nums">{{ $report->loss_percent === null ? '—' : number_format((float) $report->loss_percent, 2).'%' }}</td>
+                                <td class="px-[18px] py-3 text-right tabular-nums text-gray-600">{{ $report->z_score === null ? '—' : number_format((float) $report->z_score, 1) }}</td>
+                                <td class="px-[18px] py-3"><span class="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold {{ $flagClass }}">{{ $flag }}</span></td>
+                                <td class="px-[18px] py-3">
+                                    <span class="whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-bold {{ $statusClass }}">{{ ucfirst($report->status) }}</span>
+                                    @if ($report->status === 'resolved' && $report->resolver)
+                                        <span class="mt-1 block text-[11px] text-gray-500">by {{ $report->resolver->name }}</span>
+                                    @endif
+                                </td>
+                                <td class="max-w-[420px] px-[18px] py-3 text-[12.5px] leading-5 text-gray-600">
+                                    {{ $report->explanation ?? '—' }}
+                                    @if ($report->resolution_note)
+                                        <span class="mt-1 block text-gray-500"><span class="font-semibold text-gray-700">Note:</span> {{ $report->resolution_note }}</span>
+                                    @endif
+                                </td>
+                                <td class="whitespace-nowrap px-[18px] py-3 text-right">
+                                    @if ($canWriteInventory && $report->status !== 'resolved')
+                                        @if ($report->status === 'open')
+                                            <button type="button" wire:click="openReviewModal({{ $report->id }}, 'acknowledge')" class="text-xs font-semibold text-blue-700 hover:text-blue-900">Acknowledge</button>
+                                            <span class="mx-1 text-gray-300" aria-hidden="true">|</span>
+                                        @endif
+                                        <button type="button" wire:click="openReviewModal({{ $report->id }}, 'resolve')" class="text-xs font-semibold text-blue-700 hover:text-blue-900">Resolve</button>
+                                    @endif
+                                    @if ($canSendRequests)
+                                        <x-send-request-button related-type="leakage_report" :related-id="$report->id" compact label="Send request about leakage report #{{ $report->id }}" class="ml-2 align-middle" />
+                                    @endif
+                                </td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="px-4 py-8 text-center text-sm text-gray-500">No leakage reports match this filter.</td></tr>
+                            <tr><td colspan="8"><x-empty-state key="leakage" icon="beaker" :filtered="$leakageFlagFilter !== '' || $leakageSourceFilter !== '' || $leakageStatusFilter !== ''" /></td></tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
             <div class="border-t border-gray-100 px-[18px] py-3">{{ $leakageReports->links() }}</div>
         </section>
+
+        @if ($reviewingReport)
+            <x-modal-dialog id="leakage-review" :title="$reviewAction === 'resolve' ? 'Resolve leakage report' : 'Acknowledge leakage report'" close="closeReviewModal">
+                <p class="text-[13px] text-gray-600">{{ $reviewingReport->explanation }}</p>
+                <div>
+                    <label for="leakage-review-note" class="mb-1.5 block text-xs font-semibold text-gray-600">{{ $reviewAction === 'resolve' ? 'Resolution note' : 'Note (optional)' }}</label>
+                    <textarea id="leakage-review-note" rows="3" wire:model="reviewNote" class="w-full rounded-md border border-gray-300 px-2.5 py-2 text-[13px] text-gray-800" placeholder="{{ $reviewAction === 'resolve' ? 'What was found and what was done' : 'Who is looking into it' }}"></textarea>
+                    @error('reviewNote') <p role="alert" class="mt-1 text-[11px] text-red-600">{{ $message }}</p> @enderror
+                </div>
+                <x-slot:footer>
+                    <button type="button" wire:click="closeReviewModal" class="rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700">Cancel</button>
+                    <button type="button" wire:click="saveReview" class="rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700">{{ $reviewAction === 'resolve' ? 'Resolve' : 'Acknowledge' }}</button>
+                </x-slot:footer>
+            </x-modal-dialog>
+        @endif
     @else
         <section aria-labelledby="movement-list-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white">
             <div class="border-b border-gray-200 px-[18px] py-3.5">
@@ -437,7 +538,7 @@
                                 <td class="px-[18px] py-3">{{ $movement->user?->name ?? 'System' }}</td>
                             </tr>
                         @empty
-                            <tr><td colspan="7" class="px-4 py-8 text-center text-sm text-gray-500">No movements match these filters.</td></tr>
+                            <tr><td colspan="7"><x-empty-state key="movements" icon="arrows-right-left" :filtered="$movementTypeFilter !== '' || $movementProductFilter !== ''" /></td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -457,7 +558,7 @@
             <section role="dialog" aria-modal="true" aria-labelledby="adjust-stock-heading" class="w-full max-w-[460px] overflow-hidden rounded-[10px] bg-white shadow-xl">
                 <div class="flex items-center justify-between border-b border-gray-200 px-5 py-4">
                     <h2 id="adjust-stock-heading" class="text-[15px] font-bold text-gray-900">Adjust Stock</h2>
-                    <button type="button" wire:click="closeAdjustmentModal" aria-label="Close adjustment dialog" class="text-base text-gray-400 hover:text-gray-600">✕</button>
+                    <button type="button" wire:click="closeAdjustmentModal" aria-label="Close adjustment dialog" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><x-heroicon-o-x-mark class="size-5" aria-hidden="true" /></button>
                 </div>
                 <div class="flex flex-col gap-3.5 px-5 py-[18px]">
                     <div>
@@ -489,8 +590,12 @@
                     </div>
                     <div>
                         <div class="flex items-center justify-between gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2.5 text-xs text-gray-600">
-                            <span>Level before → after</span>
-                            <span class="font-mono text-sm font-bold text-gray-900">{{ $previewBefore === null ? '—' : number_format($previewBefore) }} → {{ $previewAfter === null ? '—' : number_format($previewAfter) }}</span>
+                            <span>Level before and after</span>
+                            <span class="inline-flex items-center gap-1.5 font-mono text-sm font-bold text-gray-900">
+                                {{ $previewBefore === null ? '—' : number_format($previewBefore) }}
+                                <x-heroicon-o-arrow-right class="size-4 text-gray-400" aria-label="to" />
+                                {{ $previewAfter === null ? '—' : number_format($previewAfter) }}
+                            </span>
                         </div>
                         <p class="mt-1 text-[11px] text-gray-500">Use a negative number to remove stock.</p>
                     </div>
@@ -513,7 +618,7 @@
             <section role="dialog" aria-modal="true" aria-labelledby="leakage-report-heading" class="w-full max-w-[460px] overflow-hidden rounded-[10px] bg-white shadow-xl">
                 <div class="flex items-center justify-between border-b border-gray-200 px-5 py-4">
                     <h2 id="leakage-report-heading" class="text-[15px] font-bold text-gray-900">New Leakage Report</h2>
-                    <button type="button" wire:click="closeLeakageReportModal" aria-label="Close leakage report dialog" class="text-base text-gray-400 hover:text-gray-600">✕</button>
+                    <button type="button" wire:click="closeLeakageReportModal" aria-label="Close leakage report dialog" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><x-heroicon-o-x-mark class="size-5" aria-hidden="true" /></button>
                 </div>
                 <div class="flex flex-col gap-3.5 px-5 py-[18px]">
                     <div>
@@ -553,7 +658,7 @@
             <section role="dialog" aria-modal="true" aria-labelledby="stock-in-heading" class="w-full max-w-[460px] overflow-hidden rounded-[10px] bg-white shadow-xl">
                 <div class="flex items-center justify-between border-b border-gray-200 px-5 py-4">
                     <h2 id="stock-in-heading" class="text-[15px] font-bold text-gray-900">Record Stock-In</h2>
-                    <button type="button" wire:click="closeStockInModal" aria-label="Close stock-in dialog" class="text-base text-gray-400 hover:text-gray-600">✕</button>
+                    <button type="button" wire:click="closeStockInModal" aria-label="Close stock-in dialog" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><x-heroicon-o-x-mark class="size-5" aria-hidden="true" /></button>
                 </div>
                 <div class="flex flex-col gap-3.5 px-5 py-[18px]">
                     <div>
@@ -595,5 +700,54 @@
                 </div>
             </section>
         </div>
+    @endif
+
+    @if ($stockCountOpen && isset($adjustableStockLines))
+        @php
+            $countLocations = $stockCountProductId === ''
+                ? collect()
+                : $adjustableStockLines->where('product_id', (int) $stockCountProductId)->pluck('warehouse_location')->unique()->values();
+        @endphp
+        <x-modal-dialog id="stock-count" title="Record stock count" close="closeStockCountModal">
+            <p class="text-[13px] text-gray-600">Counted stock replaces the system level. Any shortfall against what the recorded movements say should be there is checked for shrinkage.</p>
+            <div class="grid gap-3 sm:grid-cols-2">
+                <div>
+                    <label for="stock-count-product" class="mb-1.5 block text-xs font-semibold text-gray-600">Product</label>
+                    <select id="stock-count-product" wire:model.live="stockCountProductId" class="w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-[13px] text-gray-800">
+                        <option value="">Select product…</option>
+                        @foreach ($adjustableStockLines->pluck('product')->unique('id')->sortBy('unit_type') as $countProduct)
+                            <option value="{{ $countProduct->id }}">{{ $countProduct->unit_type }} · {{ $countProduct->name }}</option>
+                        @endforeach
+                    </select>
+                    @error('stockCountProductId') <p role="alert" class="mt-1 text-[11px] text-red-600">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label for="stock-count-location" class="mb-1.5 block text-xs font-semibold text-gray-600">Location</label>
+                    <select id="stock-count-location" wire:model="stockCountLocation" @disabled($countLocations->isEmpty()) class="w-full rounded-md border border-gray-300 bg-white px-2.5 py-2 text-[13px] text-gray-800 disabled:bg-gray-50">
+                        <option value="">{{ $countLocations->contains(null) || $countLocations->isEmpty() ? 'No location' : 'Select location…' }}</option>
+                        @foreach ($countLocations->filter() as $countLocation)
+                            <option value="{{ $countLocation }}">{{ $countLocation }}</option>
+                        @endforeach
+                    </select>
+                    @error('stockCountLocation') <p role="alert" class="mt-1 text-[11px] text-red-600">{{ $message }}</p> @enderror
+                </div>
+            </div>
+            <div class="grid gap-3 sm:grid-cols-2">
+                <div>
+                    <label for="stock-count-units" class="mb-1.5 block text-xs font-semibold text-gray-600">Counted units</label>
+                    <input id="stock-count-units" type="number" min="0" step="1" wire:model="stockCountUnits" class="w-full rounded-md border border-gray-300 px-2.5 py-2 text-[13px] text-gray-800">
+                    @error('stockCountUnits') <p role="alert" class="mt-1 text-[11px] text-red-600">{{ $message }}</p> @enderror
+                </div>
+                <div>
+                    <label for="stock-count-note" class="mb-1.5 block text-xs font-semibold text-gray-600">Note</label>
+                    <input id="stock-count-note" type="text" wire:model="stockCountNote" placeholder="Monthly count, cycle count…" class="w-full rounded-md border border-gray-300 px-2.5 py-2 text-[13px] text-gray-800">
+                    @error('stockCountNote') <p role="alert" class="mt-1 text-[11px] text-red-600">{{ $message }}</p> @enderror
+                </div>
+            </div>
+            <x-slot:footer>
+                <button type="button" wire:click="closeStockCountModal" class="rounded-md border border-gray-300 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700">Cancel</button>
+                <button type="button" wire:click="saveStockCount" wire:loading.attr="disabled" class="rounded-md bg-blue-600 px-3.5 py-2 text-[13px] font-semibold text-white hover:bg-blue-700 disabled:opacity-60">Record count</button>
+            </x-slot:footer>
+        </x-modal-dialog>
     @endif
 </div>

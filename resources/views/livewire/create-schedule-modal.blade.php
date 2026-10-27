@@ -4,7 +4,7 @@
         <div role="dialog" aria-modal="true" aria-labelledby="create-schedule-heading" class="w-full max-w-[440px] overflow-hidden rounded-[10px] bg-white shadow-xl">
             <div class="flex items-center justify-between border-b border-gray-200 px-5 py-4">
                 <h3 id="create-schedule-heading" class="text-[15px] font-bold text-gray-900">Create Schedule</h3>
-                <button type="button" wire:click="closeModal" aria-label="Close create schedule dialog" class="text-base text-gray-400 hover:text-gray-600">✕</button>
+                <button type="button" wire:click="closeModal" aria-label="Close create schedule dialog" class="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"><x-heroicon-o-x-mark class="size-5" aria-hidden="true" /></button>
             </div>
             <div class="px-5 py-[18px]">
                 <div class="mb-3.5 grid grid-cols-2 gap-3">
@@ -47,7 +47,7 @@
                     @error('targetUnits') <p class="mt-1 text-[11px] text-red-500">{{ $message }}</p> @enderror
                     @if ($forecastSuggestion !== null && $forecastSuggestion['available'])
                         <p class="mt-1 text-[11px] text-[#1d4ed8]">
-                            ML suggestion: {{ number_format($forecastSuggestion['demand']) }} units for {{ $productSku }} on {{ $scheduledDate }}.
+                            ML suggestion: {{ number_format($forecastSuggestion['demand']) }} units for {{ $productSku }} on {{ app(\App\Support\SettingsDate::class)->formatDate($scheduledDate) }}.
                             <button type="button" wire:click="applyForecast" class="font-semibold underline underline-offset-2 hover:text-blue-800">Apply suggestion</button>
                         </p>
                     @elseif ($forecastSuggestion !== null)

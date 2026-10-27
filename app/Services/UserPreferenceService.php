@@ -39,6 +39,8 @@ class UserPreferenceService
 
     public const PAGE_SIZE_KEY = 'ui.page_size';
 
+    public const TOUR_KEY = 'tour.welcome_seen_at';
+
     /**
      * @var array<int, array<string, string>>
      */
@@ -207,6 +209,20 @@ class UserPreferenceService
             }
         });
 
+        unset($this->cache[$user->id]);
+    }
+
+    public function hasSeenWelcomeTour(User $user): bool
+    {
+        return array_key_exists(self::TOUR_KEY, $this->stored($user));
+    }
+
+    /**
+     * Recorded when the tour first opens, so it runs once even if the user leaves part-way; Replay reopens it.
+     */
+    public function markWelcomeTourSeen(User $user): void
+    {
+        $user->preferences()->updateOrCreate(['key' => self::TOUR_KEY], ['value' => now()->toIso8601String()]);
         unset($this->cache[$user->id]);
     }
 

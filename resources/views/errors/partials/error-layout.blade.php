@@ -33,7 +33,9 @@
 
         * { box-sizing: border-box; }
         body {
+            display: flex;
             min-height: 100vh;
+            flex-direction: column;
             margin: 0;
             background: var(--gray-50);
             color: var(--gray-800);
@@ -56,8 +58,9 @@
             justify-content: center;
             border-radius: 7px;
             background: linear-gradient(135deg, var(--blue-500), var(--teal-500));
-            font-size: 15px;
+            color: #fff;
         }
+        .brand-mark svg { width: 16px; height: 16px; }
         .brand-name { font-size: 14px; font-weight: 800; }
         .brand-caption {
             margin-left: auto;
@@ -70,7 +73,7 @@
         .error-stage {
             position: relative;
             display: flex;
-            min-height: calc(100vh - 52px);
+            flex: 1;
             align-items: center;
             justify-content: center;
             padding: 48px 24px;
@@ -98,11 +101,12 @@
             justify-content: center;
             margin: 0 auto 22px;
             border-radius: 16px;
-            font-size: 28px;
         }
-        .badge-amber { background: linear-gradient(135deg, #fef3c7, #fde68a); }
-        .badge-blue { background: linear-gradient(135deg, #dbeafe, #bfdbfe); }
-        .badge-red { background: linear-gradient(135deg, #fee2e2, #fecaca); }
+        .error-badge svg { width: 30px; height: 30px; }
+        .btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+        .badge-amber { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #b45309; }
+        .badge-blue { background: linear-gradient(135deg, #dbeafe, #bfdbfe); color: #1d4ed8; }
+        .badge-red { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #b91c1c; }
         .error-code {
             margin-bottom: 10px;
             color: var(--gray-400);
@@ -177,23 +181,36 @@
             font-family: "JetBrains Mono", Consolas, monospace;
             font-size: 11px;
         }
+        .site-footer {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 6px 16px;
+            padding: 12px 24px;
+            border-top: 1px solid var(--gray-200);
+            background: var(--gray-50);
+            color: var(--gray-500);
+            font-size: 12px;
+        }
+        .site-footer strong { color: var(--gray-700); font-weight: 600; }
         @media (max-width: 480px) {
             .brand-caption { display: none; }
-            .error-stage { min-height: calc(100vh - 52px); padding: 32px 18px; }
+            .error-stage { padding: 32px 18px; }
             .error-meta { flex-direction: column; gap: 6px; }
+            .site-footer { flex-direction: column; padding: 12px 18px; }
         }
     </style>
 </head>
 <body>
     <header class="topbar">
-        <span class="brand-mark" aria-hidden="true">💧</span>
+        <span class="brand-mark" aria-hidden="true"><x-brand-droplet /></span>
         <span class="brand-name">AquaOps</span>
         <span class="brand-caption">Operations Console</span>
     </header>
 
     <main @class(['error-stage', 'has-pattern' => $pattern ?? false])>
         <section class="error-card" aria-labelledby="error-title">
-            <div class="error-badge badge-{{ $tone }}" aria-hidden="true">{{ $icon }}</div>
+            <div class="error-badge badge-{{ $tone }}" aria-hidden="true"><x-dynamic-component :component="'heroicon-o-'.$icon" /></div>
             <div class="error-code">Error {{ $status }}</div>
             <h1 id="error-title" class="error-title">{{ $title }}</h1>
             <p class="error-desc">{{ $description }}</p>
@@ -204,16 +221,33 @@
 
             <div class="error-actions">
                 @foreach ($actions as $action)
+                    @php
+                        $actionIcon = isset($action['icon']) ? 'heroicon-o-'.$action['icon'] : null;
+                    @endphp
                     @if ($action['reload'] ?? false)
                         <button type="button" class="btn btn-{{ $action['style'] }}" onclick="window.location.reload()">
+                            @if ($actionIcon)<x-dynamic-component :component="$actionIcon" aria-hidden="true" />@endif
                             {{ $action['label'] }}
                         </button>
                     @elseif ($action['history'] ?? false)
                         <button type="button" class="btn btn-{{ $action['style'] }}" onclick="window.history.back()">
+                            @if ($actionIcon)<x-dynamic-component :component="$actionIcon" aria-hidden="true" />@endif
                             {{ $action['label'] }}
                         </button>
+                    @elseif (isset($action['form']))
+                        <form method="POST" action="{{ $action['form'] }}">
+                            @csrf
+                            @foreach ($action['fields'] ?? [] as $fieldName => $fieldValue)
+                                <input type="hidden" name="{{ $fieldName }}" value="{{ $fieldValue }}">
+                            @endforeach
+                            <button type="submit" class="btn btn-{{ $action['style'] }}">
+                                @if ($actionIcon)<x-dynamic-component :component="$actionIcon" aria-hidden="true" />@endif
+                                {{ $action['label'] }}
+                            </button>
+                        </form>
                     @else
                         <a class="btn btn-{{ $action['style'] }}" href="{{ $action['href'] }}">
+                            @if ($actionIcon)<x-dynamic-component :component="$actionIcon" aria-hidden="true" />@endif
                             {{ $action['label'] }}
                         </a>
                     @endif
@@ -227,5 +261,11 @@
             @endif
         </section>
     </main>
+
+    @php($footerDetails = app(\App\Support\FooterDetails::class))
+    <footer class="site-footer">
+        <span><strong>{{ $footerDetails->organisationName() }}</strong> &middot; &copy; {{ $footerDetails->year() }}</span>
+        <span>AquaOps v{{ $footerDetails->version() }}</span>
+    </footer>
 </body>
 </html>

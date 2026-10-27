@@ -5,14 +5,17 @@ namespace App\Livewire;
 use App\Models\ProductionLine;
 use App\Models\ProductionSchedule;
 use App\Models\User;
-use App\Services\NotificationService;
+use App\Services\Leakage\ProcessLossAssessment;
+use App\Services\Leakage\ProductionRunCompletion;
 use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
@@ -25,13 +28,29 @@ class ProductionRuns extends Component
 
     public ?int $selectedRunId = null;
 
-    public ?int $confirmingCompletion = null;
+    #[Locked]
+    public ?int $completingRunId = null;
+
+    public string $rawWaterVolume = '';
+
+    public string $meteredBottledVolume = '';
+
+    public ?string $completionResult = null;
 
     public function mount(): void
     {
         $requestedDate = request()->query('date');
 
         $this->selectedDate = $this->resolveDate(is_string($requestedDate) ? $requestedDate : null);
+
+        // Deep link from a request: open that run on its own day.
+        $requestedRunId = request()->query('run');
+        $requestedRun = is_numeric($requestedRunId) ? ProductionSchedule::query()->find((int) $requestedRunId) : null;
+
+        if ($requestedRun instanceof ProductionSchedule) {
+            $this->selectedRunId = $requestedRun->id;
+            $this->selectedDate = $this->resolveDate(Carbon::parse($requestedRun->scheduled_date)->toDateString());
+        }
     }
 
     public function updatedSelectedDate(): void
@@ -90,7 +109,6 @@ class ProductionRuns extends Component
         }
 
         $run->update(['status' => 'active']);
-        $this->confirmingCompletion = null;
     }
 
     public function completeRun(int $scheduleId): void
@@ -108,15 +126,53 @@ class ProductionRuns extends Component
             return;
         }
 
-        if ($run->logs()->count() === 0 && $this->confirmingCompletion !== $run->id) {
-            $this->confirmingCompletion = $run->id;
+        $this->resetValidation();
+        $this->reset(['rawWaterVolume', 'meteredBottledVolume']);
+        $this->completingRunId = $run->id;
+    }
+
+    public function closeCompletion(): void
+    {
+        $this->completingRunId = null;
+        $this->resetValidation();
+    }
+
+    /**
+     * Completes the run and its batch with the volumes read off the meters, then runs leakage detection.
+     */
+    public function finishCompletion(ProductionRunCompletion $completion): void
+    {
+        $user = auth()->user();
+
+        abort_unless($user instanceof User, 403);
+        app(ModuleAccess::class)->authorize($user, 'production', write: true);
+
+        $validated = $this->validate([
+            'rawWaterVolume' => ['required', 'numeric', 'decimal:0,3', 'gt:0', 'max:999999999'],
+            'meteredBottledVolume' => ['required', 'numeric', 'decimal:0,3', 'min:0', 'max:999999999'],
+        ], [], [
+            'rawWaterVolume' => 'raw water used',
+            'meteredBottledVolume' => 'metered bottled volume',
+        ]);
+
+        $run = ProductionSchedule::query()->findOrFail((int) $this->completingRunId);
+
+        try {
+            $assessment = $completion->complete($run, (string) $validated['rawWaterVolume'], (string) $validated['meteredBottledVolume'], $user);
+        } catch (InvalidArgumentException $exception) {
+            $this->addError('runTransition', $exception->getMessage());
+            $this->completingRunId = null;
 
             return;
         }
 
-        $run->update(['status' => 'complete']);
-        $this->confirmingCompletion = null;
-        app(NotificationService::class)->productionRunCompleted($run, $user);
+        $this->completingRunId = null;
+        $this->completionResult = $assessment === null
+            ? "{$run->product_sku} run completed. Leakage was not checked because the product has no volume set."
+            : "{$run->product_sku} run completed as batch {$assessment->batchReference}: "
+                .ProcessLossAssessment::percent($assessment->lossPercent).'% process loss against '
+                .ProcessLossAssessment::percent($assessment->normalLossPercent).'% normal'
+                .($assessment->reportsLoss() || $assessment->gapSeverity !== null ? '. A leakage report was raised.' : '.');
     }
 
     public function render(): View
@@ -156,7 +212,7 @@ class ProductionRuns extends Component
         if ($value !== null && $value !== '') {
             try {
                 return Carbon::createFromFormat('Y-m-d', $value)->toDateString();
-            } catch (\InvalidArgumentException|\UnexpectedValueException) {
+            } catch (InvalidArgumentException|\UnexpectedValueException) {
                 // Fall through to today.
             }
         }

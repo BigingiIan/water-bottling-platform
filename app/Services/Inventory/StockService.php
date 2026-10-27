@@ -39,13 +39,18 @@ class StockService
 
     public function statusForProduct(Product $product, ?float $totalUnits = null): string
     {
+        $total = $totalUnits ?? $this->totalForProduct($product);
+
+        if ($total <= 0) {
+            return 'out';
+        }
+
         $reorderThreshold = $product->reorder_threshold;
 
         if (! is_numeric($reorderThreshold) || (float) $reorderThreshold <= 0) {
             return 'ok';
         }
 
-        $total = $totalUnits ?? $this->totalForProduct($product);
         $threshold = (float) $reorderThreshold;
 
         $criticalPercent = $this->settings->get('inventory.critical_percent', 50);

@@ -1,10 +1,6 @@
-<section aria-labelledby="error-logs-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-    <div class="flex flex-wrap items-center justify-between gap-4 border-b border-gray-100 px-[18px] py-4">
-        <div>
-            <h1 id="error-logs-heading" class="text-[15px] font-bold text-gray-900">Error Logs</h1>
-            <p class="mt-0.5 text-xs text-gray-500">Branded 403 and 500 errors from the last 30 days</p>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
+<div class="flex flex-col gap-6">
+    <x-page-header help="error-logs" heading-id="error-logs-heading" title="Error Logs" :subtitle="'Branded 403 and 500 errors from the last '.\App\Support\Plural::count((int) app(\App\Services\SettingsService::class)->get('retention.error_log_days', 30), 'day').'.'">
+        <x-slot:actions>
             <div class="inline-flex rounded-md border border-gray-300 bg-white p-0.5 text-xs">
                 <button type="button" wire:click="showGroups" @class(['rounded px-2.5 py-1.5', 'bg-blue-600 text-white' => $viewMode === 'groups', 'text-gray-600 hover:bg-gray-100' => $viewMode !== 'groups']) aria-pressed="{{ $viewMode === 'groups' ? 'true' : 'false' }}">Grouped</button>
                 <button type="button" wire:click="showEvents" @class(['rounded px-2.5 py-1.5', 'bg-blue-600 text-white' => $viewMode === 'events', 'text-gray-600 hover:bg-gray-100' => $viewMode !== 'events']) aria-pressed="{{ $viewMode === 'events' ? 'true' : 'false' }}">Raw events</button>
@@ -18,8 +14,10 @@
                 placeholder="Search reference code…"
                 class="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 placeholder:text-gray-400 sm:w-64"
             >
-        </div>
-    </div>
+        </x-slot:actions>
+    </x-page-header>
+
+    <section aria-labelledby="error-logs-heading" class="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
 
     <div class="flex flex-wrap gap-2 border-b border-gray-100 bg-gray-50 px-[18px] py-3">
         <select wire:model.live="statusFilter" aria-label="Filter by status" class="rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs text-gray-700">
@@ -133,7 +131,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="{{ $canViewSensitiveDetails ? 8 : 7 }}" class="px-[18px] py-8 text-center text-sm text-gray-500">No error events match these filters.</td>
+                            <td colspan="{{ $canViewSensitiveDetails ? 8 : 7 }}"><x-empty-state key="error_logs" icon="shield-check" :filtered="$statusFilter !== null || $userFilter !== null || $moduleFilter !== null || $referenceSearch !== ''" /></td>
                         </tr>
                     @endforelse
                 </tbody>
@@ -143,7 +141,7 @@
 
     @php($page = $groups ?? $events)
     <nav aria-label="Error event pagination" class="flex items-center justify-between border-t border-gray-100 px-[18px] py-3">
-        <p class="text-xs text-gray-500">Showing {{ $page->firstItem() ?? 0 }}–{{ $page->lastItem() ?? 0 }} of {{ $page->total() }} {{ $viewMode === 'groups' ? 'groups' : 'events' }}</p>
+        <p class="text-xs text-gray-500">Showing {{ $page->firstItem() ?? 0 }}–{{ $page->lastItem() ?? 0 }} of {{ \App\Support\Plural::count($page->total(), $viewMode === 'groups' ? 'group' : 'event') }}</p>
         <div class="flex gap-1.5">
             <button
                 type="button"
@@ -151,14 +149,14 @@
                 wire:click="previousPage"
                 @disabled($page->onFirstPage())
                 class="flex size-7 items-center justify-center rounded-md border border-gray-300 bg-white text-xs text-gray-600 disabled:cursor-not-allowed disabled:text-gray-400"
-            >‹</button>
+            ><x-heroicon-o-chevron-left class="size-4" aria-hidden="true" /></button>
             <button
                 type="button"
                 aria-label="Next page"
                 wire:click="nextPage"
                 @disabled(! $page->hasMorePages())
                 class="flex size-7 items-center justify-center rounded-md border border-gray-300 bg-white text-xs text-gray-600 disabled:cursor-not-allowed disabled:text-gray-400"
-            >›</button>
+            ><x-heroicon-o-chevron-right class="size-4" aria-hidden="true" /></button>
         </div>
     </nav>
 
@@ -269,4 +267,5 @@
             </section>
         </div>
     @endif
-</section>
+    </section>
+</div>

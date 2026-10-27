@@ -13,16 +13,31 @@ class ProductionBatch extends Model
 
     protected $fillable = [
         'user_id',
+        'production_schedule_id',
         'batch_date',
         'raw_water_volume',
         'bottled_volume',
+        'logged_volume',
+        'process_loss_percent',
         'status',
+        'completed_at',
         'notes',
     ];
 
     protected $casts = [
         'batch_date' => 'date',
+        'completed_at' => 'datetime',
     ];
+
+    public function productionSchedule(): BelongsTo
+    {
+        return $this->belongsTo(ProductionSchedule::class);
+    }
+
+    public function reference(): string
+    {
+        return 'B-'.str_pad((string) $this->id, 5, '0', STR_PAD_LEFT);
+    }
 
     public function user(): BelongsTo
     {

@@ -148,7 +148,7 @@ class InventoryOverviewTest extends TestCase
             'leakageFlagFilter' => 'Review',
         ])
             ->test(InventoryOverview::class)
-            ->assertSee('1 reports')
+            ->assertSee('1 report<', false)
             ->assertSee('Review')
             ->assertDontSee('6.00%');
     }
@@ -255,7 +255,8 @@ class InventoryOverviewTest extends TestCase
         Livewire::test(InventoryOverview::class)
             ->assertSee('Warehouse stock');
 
-        $this->assertLessThanOrEqual(18, $queryCount);
+        // 18 for the page, plus one fixed check each for the Send request buttons and the page-title help popover.
+        $this->assertLessThanOrEqual(20, $queryCount);
     }
 
     public function test_adjustment_records_stock_movement_and_audit_row(): void

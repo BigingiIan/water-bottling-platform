@@ -145,3 +145,16 @@ def test_predict_endpoint_reports_missing_model_metadata() -> None:
         response = client.post("/predict", json=make_request_body())
 
     assert response.status_code == 503
+
+
+def test_health_endpoint_lists_served_model_versions() -> None:
+    broken = make_bundle()
+    broken.manifest.pop("model_version")
+
+    with TestClient(app) as client:
+        app.state.models = {"1L": make_bundle(), "5L": broken}
+
+        response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "models": {"1L": "2026-10-01"}}

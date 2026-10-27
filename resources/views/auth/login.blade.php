@@ -8,10 +8,10 @@
         @fonts
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="min-h-screen bg-gray-50 font-sans text-gray-800 antialiased">
-        <main class="flex min-h-screen flex-col items-center justify-center px-5 py-12">
+    <body class="flex min-h-screen flex-col bg-gray-50 font-sans text-gray-800 antialiased">
+        <main class="flex flex-1 flex-col items-center justify-center px-5 py-12">
             <a href="{{ route('login') }}" class="mb-7 flex items-center gap-2.5" aria-label="AquaOps sign in">
-                <span class="flex size-10 items-center justify-center rounded-md bg-gradient-to-br from-blue-500 to-teal-500 text-xl" aria-hidden="true">💧</span>
+                <x-brand-mark size="size-10" />
                 <span>
                     <span class="block text-lg font-extrabold tracking-[0.2px] text-gray-900">AquaOps</span>
                     <span class="block text-[10px] font-semibold uppercase tracking-[0.8px] text-gray-500">Operations Console</span>
@@ -77,14 +77,14 @@
 
                     <button type="submit" class="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
                         Sign in
-                        <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" class="size-4">
-                            <path d="M4 10h12m-5-5 5 5-5 5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7" />
-                        </svg>
+                        <x-heroicon-o-arrow-right class="size-4" aria-hidden="true" />
                     </button>
                 </form>
             </section>
 
             <p class="mt-6 text-center text-xs text-gray-400">Access is managed by your AquaOps administrator.</p>
         </main>
+
+        <x-app-footer reduced />
     </body>
 </html>
