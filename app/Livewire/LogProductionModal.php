@@ -7,6 +7,7 @@ use App\Models\ProductionSchedule;
 use App\Models\User;
 use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -62,14 +63,36 @@ class LogProductionModal extends Component
             'notes' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        ProductionLog::create([
-            'production_schedule_id' => $validated['scheduleId'],
-            'operator_id' => $user->id,
-            'units_logged' => (int) $validated['units'],
-            'logged_at' => now(),
-            'quality_status' => $validated['qualityStatus'],
-            'notes' => $validated['notes'] ?: null,
-        ]);
+        // The run is locked while the entry is written so it cannot be completed underneath it:
+        // a log added after completion would leave the batch's volume, loss % and leakage report stale.
+        $scheduleStatus = DB::transaction(function () use ($validated, $user): ?string {
+            $schedule = ProductionSchedule::query()->lockForUpdate()->find($validated['scheduleId']);
+
+            if (! $schedule instanceof ProductionSchedule || $schedule->status !== 'active') {
+                return $schedule?->status ?? 'missing';
+            }
+
+            ProductionLog::create([
+                'production_schedule_id' => $schedule->id,
+                'operator_id' => $user->id,
+                'units_logged' => (int) $validated['units'],
+                'logged_at' => now(),
+                'quality_status' => $validated['qualityStatus'],
+                'notes' => $validated['notes'] ?: null,
+            ]);
+
+            return null;
+        });
+
+        if ($scheduleStatus !== null) {
+            $this->addError('scheduleId', match ($scheduleStatus) {
+                'queued' => 'This run has not been started yet. Start the run before logging production.',
+                'complete' => 'This run is already complete, so no more production can be logged against it.',
+                default => 'This run is no longer available.',
+            });
+
+            return;
+        }
 
         $this->dispatch('production-logged', scheduleId: $validated['scheduleId']);
         $this->closeModal();
@@ -91,7 +114,7 @@ class LogProductionModal extends Component
             'openSchedules' => ProductionSchedule::query()
                 ->with('productionLine')
                 ->whereDate('scheduled_date', today()->toDateString())
-                ->whereIn('status', ['queued', 'active'])
+                ->where('status', 'active')
                 ->orderBy('scheduled_time')
                 ->get(),
         ]);

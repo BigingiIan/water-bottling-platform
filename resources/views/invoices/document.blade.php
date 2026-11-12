@@ -8,6 +8,9 @@
 @endphp
 
 <style>
+    /* An invoice is paper: it stays black on white in every theme, on screen as in the PDF. */
+    .inv-screen-paper { background: #ffffff; border-radius: 8px; padding: 32px; }
+    @media print { .inv-screen-paper { padding: 0; } }
     .inv-document { color: #0f172a; font-family: 'DejaVu Sans', Inter, Arial, sans-serif; font-size: 12px; line-height: 1.45; }
     .inv-document table { border-collapse: collapse; width: 100%; }
     .inv-head td { vertical-align: top; }

@@ -7,6 +7,8 @@ use App\Livewire\ProductionScheduleTable;
 use App\Models\LeakageReport;
 use App\Models\Product;
 use App\Models\ProductionBatch;
+use App\Models\ProductionLine;
+use App\Models\ProductionSchedule;
 use App\Models\Role;
 use App\Models\StockMovement;
 use App\Models\User;
@@ -350,7 +352,7 @@ class InventoryOverviewTest extends TestCase
             Livewire::test(InventoryOverview::class)
                 ->call('openAdjustmentModal', $stock->id)
                 ->set('adjustmentReasonType', $reasonType)
-                ->set('adjustmentChange', '1')
+                ->set('adjustmentChange', $reasonType === 'customer_return' ? '1' : '-1')
                 ->set('adjustmentNote', 'Inventory reason')
                 ->call('saveAdjustment')
                 ->assertHasNoErrors();
@@ -435,6 +437,37 @@ class InventoryOverviewTest extends TestCase
         $this->assertSame(2, (int) $stock->fresh()->current_level);
         $this->assertDatabaseCount('stock_movements', 1);
         $this->assertDatabaseCount('audit_log', 1);
+    }
+
+    public function test_stock_in_against_a_run_batch_only_accepts_the_product_that_run_bottled(): void
+    {
+        $bottled = Product::create(['name' => 'One litre', 'unit_type' => '1L', 'reorder_threshold' => 50]);
+        $other = Product::create(['name' => 'Twenty litre', 'unit_type' => '20L', 'reorder_threshold' => 50]);
+        $line = ProductionLine::query()->create(['name' => 'Line 09', 'status' => 'active']);
+        $schedule = ProductionSchedule::create([
+            'product_sku' => '1L',
+            'production_line_id' => $line->id,
+            'scheduled_date' => today()->toDateString(),
+            'scheduled_time' => '08:00',
+            'target_units' => 100,
+            'status' => 'complete',
+        ]);
+        $batch = $this->createBatch();
+        $batch->update(['production_schedule_id' => $schedule->id]);
+
+        $component = Livewire::test(InventoryOverview::class)
+            ->call('openStockInModal')
+            ->set('stockInBatchId', (string) $batch->id)
+            ->set('stockInLocation', 'Bay C3')
+            ->set('stockInQuantity', '10')
+            ->set('stockInProductId', (string) $other->id)
+            ->call('saveStockIn')
+            ->assertHasErrors('stockInProductId');
+
+        $this->assertDatabaseCount('stock_movements', 0);
+
+        $component->set('stockInProductId', (string) $bottled->id)->call('saveStockIn')->assertHasNoErrors();
+        $component->call('openStockInModal')->set('stockInQuantity', '99999999')->call('saveStockIn')->assertHasErrors('stockInQuantity');
     }
 
     public function test_stock_in_creates_a_line_and_records_a_movement(): void

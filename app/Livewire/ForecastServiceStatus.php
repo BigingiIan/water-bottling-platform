@@ -25,8 +25,8 @@ class ForecastServiceStatus extends Component
     public function placeholder(): string
     {
         return <<<'HTML'
-            <span class="inline-flex items-center gap-1.5 whitespace-nowrap text-gray-400">
-                <span aria-hidden="true" class="size-2 rounded-full bg-gray-300"></span>
+            <span class="inline-flex items-center gap-1.5 whitespace-nowrap text-muted">
+                <span aria-hidden="true" class="size-2 rounded-full bg-border-strong"></span>
                 <span class="sr-only">Checking forecast service</span>
             </span>
             HTML;

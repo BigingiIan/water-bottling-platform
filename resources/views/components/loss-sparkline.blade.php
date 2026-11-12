@@ -26,12 +26,12 @@
 
 <svg viewBox="0 0 {{ $width }} {{ $height }}" {{ $attributes->class(['h-11 w-full']) }} role="img" aria-label="{{ $summary }}">
     <title>{{ $summary }}</title>
-    <line x1="{{ $padding }}" x2="{{ $width - $padding }}" y1="{{ $y(0.0) }}" y2="{{ $y(0.0) }}" stroke="#94a3b8" stroke-width="1" />
-    <line x1="{{ $padding }}" x2="{{ $width - $padding }}" y1="{{ $y($review) }}" y2="{{ $y($review) }}" stroke="#d97706" stroke-width="1" stroke-dasharray="3 3" />
+    <line x1="{{ $padding }}" x2="{{ $width - $padding }}" y1="{{ $y(0.0) }}" y2="{{ $y(0.0) }}" class="stroke-subtle" stroke-width="1" />
+    <line x1="{{ $padding }}" x2="{{ $width - $padding }}" y1="{{ $y($review) }}" y2="{{ $y($review) }}" class="stroke-warning" stroke-width="1" stroke-dasharray="3 3" />
     @if ($count > 1)
-        <polyline points="{{ $points }}" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+        <polyline points="{{ $points }}" fill="none" class="stroke-chart-1" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
     @endif
     @if ($latest !== null)
-        <circle cx="{{ $x($count - 1) }}" cy="{{ $y($latest) }}" r="3.5" fill="#2a78d6" stroke="#ffffff" stroke-width="2" />
+        <circle cx="{{ $x($count - 1) }}" cy="{{ $y($latest) }}" r="3.5" stroke-width="2" class="fill-chart-1 stroke-surface" />
     @endif
 </svg>

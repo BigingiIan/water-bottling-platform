@@ -28,7 +28,12 @@ Thumbs.db
 /model_reference
 /ml/models/
 /ml/saved_models/
-/ml/outputs/
+/ml/outputs/*
+!/ml/outputs/saved_models/
+/ml/.venv/
+/ml/.pytest_cache/
 __pycache__/
 *.py[cod]
 /data/
+/DETAILS.md
+/storage/app/design-review/

@@ -6,30 +6,11 @@
     <meta name="color-scheme" content="light">
     <title>Error {{ $status }} | AquaOps</title>
     <style>
-        :root {
-            --navy-950: #0b1220;
-            --navy-900: #0f1b2e;
-            --navy-700: #1e3350;
-            --blue-600: #2563eb;
-            --blue-500: #3b82f6;
-            --blue-50: #eff6ff;
-            --teal-500: #14b8a6;
-            --amber-500: #d97706;
-            --amber-50: #fffbeb;
-            --red-500: #dc2626;
-            --red-50: #fef2f2;
-            --gray-50: #f8fafc;
-            --gray-100: #f1f5f9;
-            --gray-200: #e2e8f0;
-            --gray-300: #cbd5e1;
-            --gray-400: #94a3b8;
-            --gray-500: #64748b;
-            --gray-600: #475569;
-            --gray-700: #334155;
-            --gray-800: #1e293b;
-            --gray-900: #0f172a;
-            --radius: 8px;
-        }
+        /*
+         * Error pages stand alone (no asset build, no database), so they always use the default profile's light
+         * tokens from config/appearance.php rather than the visitor's theme.
+         */
+        :root { {!! app(\App\Support\Appearance\Palette::class)->declarations(config('appearance.default_profile'), 'light') !!} --radius: 8px; }
 
         * { box-sizing: border-box; }
         body {
@@ -37,8 +18,8 @@
             min-height: 100vh;
             flex-direction: column;
             margin: 0;
-            background: var(--gray-50);
-            color: var(--gray-800);
+            background: var(--c-background);
+            color: var(--c-text);
             font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }
         .topbar {
@@ -47,8 +28,8 @@
             align-items: center;
             gap: 10px;
             padding: 0 24px;
-            background: var(--navy-950);
-            color: white;
+            background: var(--c-sidebar);
+            color: var(--c-sidebar-strong);
         }
         .brand-mark {
             display: flex;
@@ -57,14 +38,14 @@
             align-items: center;
             justify-content: center;
             border-radius: 7px;
-            background: linear-gradient(135deg, var(--blue-500), var(--teal-500));
-            color: #fff;
+            background: linear-gradient(135deg, var(--c-brand-from), var(--c-brand-to));
+            color: var(--c-on-brand);
         }
         .brand-mark svg { width: 16px; height: 16px; }
         .brand-name { font-size: 14px; font-weight: 800; }
         .brand-caption {
             margin-left: auto;
-            color: var(--gray-400);
+            color: var(--c-muted);
             font-size: 11px;
             font-weight: 500;
             letter-spacing: .04em;
@@ -77,14 +58,11 @@
             align-items: center;
             justify-content: center;
             padding: 48px 24px;
-            background:
-                radial-gradient(circle at 20% 20%, rgba(59,130,246,.04), transparent 40%),
-                radial-gradient(circle at 85% 75%, rgba(20,184,166,.04), transparent 40%),
-                #fff;
+            background: var(--c-surface);
         }
         .error-stage.has-pattern {
-            background-color: #fff;
-            background-image: radial-gradient(var(--gray-200) 1px, transparent 1px);
+            background-color: var(--c-surface);
+            background-image: radial-gradient(var(--c-border) 1px, transparent 1px);
             background-size: 22px 22px;
         }
         .error-card {
@@ -104,12 +82,12 @@
         }
         .error-badge svg { width: 30px; height: 30px; }
         .btn svg { width: 16px; height: 16px; flex-shrink: 0; }
-        .badge-amber { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #b45309; }
-        .badge-blue { background: linear-gradient(135deg, #dbeafe, #bfdbfe); color: #1d4ed8; }
-        .badge-red { background: linear-gradient(135deg, #fee2e2, #fecaca); color: #b91c1c; }
+        .badge-amber { background: var(--c-warning-soft); color: var(--c-warning-ink); }
+        .badge-blue { background: var(--c-accent-soft); color: var(--c-accent-ink); }
+        .badge-red { background: var(--c-danger-soft); color: var(--c-danger-ink); }
         .error-code {
             margin-bottom: 10px;
-            color: var(--gray-400);
+            color: var(--c-muted);
             font-family: "JetBrains Mono", Consolas, monospace;
             font-size: 12px;
             font-weight: 600;
@@ -118,14 +96,14 @@
         }
         .error-title {
             margin: 0 0 10px;
-            color: var(--gray-900);
+            color: var(--c-text);
             font-size: 21px;
             font-weight: 800;
             letter-spacing: -.2px;
         }
         .error-desc {
             margin: 0 0 22px;
-            color: var(--gray-500);
+            color: var(--c-muted);
             font-size: 13.5px;
             line-height: 1.6;
         }
@@ -135,10 +113,10 @@
             gap: 7px;
             margin-bottom: 24px;
             padding: 6px 14px;
-            border: 1px solid var(--gray-200);
+            border: 1px solid var(--c-border);
             border-radius: 20px;
-            background: var(--gray-100);
-            color: var(--gray-600);
+            background: var(--c-surface-strong);
+            color: var(--c-text-soft);
             font-size: 12px;
             font-weight: 600;
         }
@@ -163,11 +141,11 @@
             text-decoration: none;
             cursor: pointer;
         }
-        .btn-primary { background: var(--blue-600); color: #fff; }
+        .btn-primary { background: var(--c-accent); color: var(--c-on-accent); }
         .btn-secondary {
-            border-color: var(--gray-300);
-            background: #fff;
-            color: var(--gray-700);
+            border-color: var(--c-border-strong);
+            background: var(--c-surface);
+            color: var(--c-text-soft);
         }
         .btn:hover { filter: brightness(.96); }
         .error-meta {
@@ -176,8 +154,8 @@
             gap: 22px;
             margin-top: 28px;
             padding-top: 18px;
-            border-top: 1px solid var(--gray-100);
-            color: var(--gray-400);
+            border-top: 1px solid var(--c-surface-strong);
+            color: var(--c-muted);
             font-family: "JetBrains Mono", Consolas, monospace;
             font-size: 11px;
         }
@@ -187,12 +165,12 @@
             justify-content: space-between;
             gap: 6px 16px;
             padding: 12px 24px;
-            border-top: 1px solid var(--gray-200);
-            background: var(--gray-50);
-            color: var(--gray-500);
+            border-top: 1px solid var(--c-border);
+            background: var(--c-background);
+            color: var(--c-muted);
             font-size: 12px;
         }
-        .site-footer strong { color: var(--gray-700); font-weight: 600; }
+        .site-footer strong { color: var(--c-text-soft); font-weight: 600; }
         @media (max-width: 480px) {
             .brand-caption { display: none; }
             .error-stage { padding: 32px 18px; }

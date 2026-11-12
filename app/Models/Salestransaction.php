@@ -22,6 +22,7 @@ class SalesTransaction extends Model
     ];
 
     const CREATED_AT = 'transaction_date';
+
     const UPDATED_AT = null;
 
     public function customer(): BelongsTo

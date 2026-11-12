@@ -2,11 +2,14 @@
 
 namespace App\Support\Dashboard;
 
+use App\Livewire\Dashboard\EquipmentStatusWidget;
 use App\Livewire\Dashboard\ForecastCoverWidget;
 use App\Livewire\Dashboard\LeakageReviewWidget;
+use App\Livewire\Dashboard\MaintenanceDueWidget;
 use App\Livewire\Dashboard\MyRequestsWidget;
 use App\Livewire\Dashboard\NotificationsWidget;
 use App\Livewire\Dashboard\OpenRunsWidget;
+use App\Livewire\Dashboard\OpenWorkOrdersWidget;
 use App\Livewire\Dashboard\OrdersTodayWidget;
 use App\Livewire\Dashboard\ReceivablesWidget;
 use App\Livewire\Dashboard\RecentActivityWidget;
@@ -39,11 +42,11 @@ class DashboardWidgetRegistry
      * @var array<string, list<string>>
      */
     public const ROLE_LAYOUTS = [
-        'administrator' => ['stock-alerts', 'todays-output', 'orders-today', 'receivables', 'leakage-review', 'open-runs', 'forecast-cover', 'recent-activity', 'notifications'],
+        'administrator' => ['stock-alerts', 'todays-output', 'orders-today', 'receivables', 'leakage-review', 'equipment-status', 'open-runs', 'forecast-cover', 'recent-activity', 'notifications'],
         'production' => ['todays-output', 'open-runs', 'stock-alerts', 'leakage-review', 'forecast-cover', 'my-requests', 'notifications'],
         'warehouse' => ['stock-alerts', 'orders-today', 'leakage-review', 'forecast-cover', 'my-requests', 'notifications'],
         'sales' => ['orders-today', 'receivables', 'stock-alerts', 'my-requests', 'notifications'],
-        'maintenance' => ['my-requests', 'notifications'],
+        'maintenance' => ['maintenance-due', 'open-work-orders', 'equipment-status', 'my-requests', 'notifications'],
     ];
 
     /**
@@ -72,6 +75,9 @@ class DashboardWidgetRegistry
             new DashboardWidget('my-requests', 'My requests', 'requests', 'view', MyRequestsWidget::class, DashboardWidget::SIZE_SMALL, 65,
                 available: fn (): bool => class_exists(self::REQUEST_MODEL), personal: true),
             new DashboardWidget('forecast-cover', "Tomorrow's forecast vs stock cover", 'forecasting', 'view', ForecastCoverWidget::class, DashboardWidget::SIZE_WIDE, 60),
+            new DashboardWidget('maintenance-due', 'Maintenance due', 'maintenance', 'view', MaintenanceDueWidget::class, DashboardWidget::SIZE_SMALL, 72),
+            new DashboardWidget('open-work-orders', 'Open work orders', 'maintenance', 'view', OpenWorkOrdersWidget::class, DashboardWidget::SIZE_SMALL, 68),
+            new DashboardWidget('equipment-status', 'Equipment not operational', 'maintenance', 'view', EquipmentStatusWidget::class, DashboardWidget::SIZE_SMALL, 66),
             new DashboardWidget('notifications', 'Latest notifications', null, 'view', NotificationsWidget::class, DashboardWidget::SIZE_SMALL, 50),
             new DashboardWidget('recent-activity', 'Recent activity', 'settings', 'view', RecentActivityWidget::class, DashboardWidget::SIZE_WIDE, 40,
                 administratorOnly: true),

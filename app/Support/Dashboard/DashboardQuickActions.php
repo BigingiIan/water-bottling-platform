@@ -21,6 +21,7 @@ class DashboardQuickActions
         'schedule-production' => ['label' => 'Schedule production', 'icon' => 'calendar-days', 'module' => 'production', 'route' => 'production.schedule', 'parameters' => []],
         'create-order' => ['label' => 'Create order', 'icon' => 'clipboard-document-list', 'module' => 'orders', 'route' => 'orders.create', 'parameters' => []],
         'record-stock-count' => ['label' => 'Record stock count', 'icon' => 'clipboard-document-check', 'module' => 'inventory', 'route' => 'inventory.overview', 'parameters' => ['open' => 'stock-count']],
+        'report-breakdown' => ['label' => 'Report a breakdown', 'icon' => 'wrench-screwdriver', 'module' => 'maintenance', 'route' => 'maintenance.equipment.index', 'parameters' => []],
         'invite-user' => ['label' => 'Invite user', 'icon' => 'user-plus', 'module' => 'users-roles', 'route' => 'staff.directory', 'parameters' => []],
     ];
 
@@ -32,6 +33,7 @@ class DashboardQuickActions
         'production' => ['log-production', 'schedule-production', 'record-stock-count'],
         'warehouse' => ['record-stock-count', 'create-order'],
         'sales' => ['create-order'],
+        'maintenance' => ['report-breakdown'],
     ];
 
     public function __construct(private DashboardWidgetRegistry $registry) {}

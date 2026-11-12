@@ -30,13 +30,35 @@ All inference lives in `serving/inference.py`:
 web-framework code. Models whose stacker weight is exactly zero are neither
 loaded nor run.
 
-The service defaults to `ml/saved_models`; set `ML_MODEL_DIR` only if the
-artifacts are stored elsewhere:
+The service defaults to `ml/outputs/saved_models` (resolved from the `ml`
+directory, not the working directory), the same default Laravel uses; set
+`ML_MODEL_DIR` only if the artifacts are stored elsewhere:
 
 ```powershell
-$env:ML_MODEL_DIR = "C:\path\to\water-bottling-platform\ml\saved_models"
-uv run --directory ml uvicorn serving.api:app --app-dir . --host 0.0.0.0 --port 8001
+$env:ML_MODEL_DIR = "C:\path\to\water-bottling-platform\ml\outputs\saved_models"
+uv run --directory ml uvicorn serving.api:app --app-dir . --host 127.0.0.1 --port 8001
 ```
+
+A SKU whose artifacts fail to load is logged and skipped; the other SKUs are
+still served, and `GET /health` lists the skipped ones under `failed`.
+
+## Running on a host
+
+- Install the locked dependencies with `uv sync --frozen --no-dev`
+  (`requirements.txt` is generated from `uv.lock` for pip-only environments).
+- Set `ML_MODEL_DIR` to the bundle directory and `ML_API_TOKEN` to a long random
+  secret. With the token set, every endpoint requires
+  `Authorization: Bearer <token>` and answers 401 otherwise; set the same value
+  as `ML_FORECAST_TOKEN` in Laravel's `.env`. Without it the service logs a
+  warning at startup and accepts unauthenticated requests (local development
+  only).
+- Run a single uvicorn worker (`--workers 1`, the default): every worker loads
+  every model into memory.
+- Bind to `127.0.0.1`, or to a private-network address when Laravel runs on
+  another machine, and never expose port 8001 publicly.
+- The Streamlit dashboard has no authentication. `.streamlit/config.toml` binds
+  it to `127.0.0.1`; do not expose it, and leave Laravel's `ML_DASHBOARD_URL`
+  unset in production.
 
 Set `ML_MODEL_DIR` to a directory containing one subdirectory per SKU. Each
 SKU directory must contain:

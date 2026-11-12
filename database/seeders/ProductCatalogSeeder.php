@@ -5,24 +5,35 @@ namespace Database\Seeders;
 use App\Models\Product;
 use Illuminate\Database\Seeder;
 use RuntimeException;
-use SplFileObject;
 
 /**
- * Prices every SKU at its most recent unit_price_kes in the demand CSV and derives volume from the SKU label.
+ * Creates the product catalogue a working install needs. Prices are each SKU's latest unit_price_kes in the
+ * demand dataset (31 Dec 2025), held here so seeding does not depend on the CSV; volume comes from the SKU label.
+ *
+ * Only missing rows and missing values are filled: a price an operator has changed is never overwritten.
  */
 class ProductCatalogSeeder extends Seeder
 {
+    /**
+     * @var array<string, string> SKU => unit price in KES
+     */
+    public const CATALOGUE = [
+        '500ml' => '25.00',
+        '1L' => '45.00',
+        '5L' => '120.00',
+        '10L' => '220.00',
+        '20L' => '350.00',
+    ];
+
     public function run(): void
     {
-        foreach ($this->latestPrices() as $sku => $price) {
+        foreach (self::CATALOGUE as $sku => $price) {
             $product = Product::query()->firstOrNew(['unit_type' => $sku]);
             $product->name ??= "Bottled Water {$sku}";
-            $product->unit_price_kes = $price;
-            $product->volume_litres = self::volumeFromSku($sku);
+            $product->unit_price_kes ??= $price;
+            $product->volume_litres ??= self::volumeFromSku($sku);
             $product->save();
         }
-
-        $this->command?->info('Priced products from the latest demand CSV rows.');
     }
 
     /**
@@ -39,37 +50,5 @@ class ProductCatalogSeeder extends Seeder
             : bcadd($matches[1], '0', 3);
 
         return $litres;
-    }
-
-    /**
-     * @return array<string, string> SKU => price with two decimals, from each SKU's latest dated row
-     */
-    private function latestPrices(): array
-    {
-        $path = base_path('data/kenya_water_demand_daily.csv');
-
-        if (! is_readable($path)) {
-            throw new RuntimeException("Demand CSV is missing or unreadable: {$path}");
-        }
-
-        $file = new SplFileObject($path);
-        $file->setFlags(SplFileObject::READ_CSV | SplFileObject::SKIP_EMPTY | SplFileObject::READ_AHEAD);
-        $columns = array_flip((array) $file->fgetcsv());
-        $latest = [];
-
-        foreach ($file as $values) {
-            if (! is_array($values) || ! isset($values[$columns['unit_price_kes']]) || $values[$columns['date']] === 'date') {
-                continue;
-            }
-
-            $sku = $values[$columns['product_sku']];
-            $date = $values[$columns['date']];
-
-            if (! isset($latest[$sku]) || $date >= $latest[$sku]['date']) {
-                $latest[$sku] = ['date' => $date, 'price' => bcadd((string) $values[$columns['unit_price_kes']], '0', 2)];
-            }
-        }
-
-        return array_map(fn (array $row): string => $row['price'], $latest);
     }
 }

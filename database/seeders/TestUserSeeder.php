@@ -6,14 +6,21 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use RuntimeException;
 
 class TestUserSeeder extends Seeder
 {
     /**
      * Seed test accounts for each application role.
+     *
+     * Every account shares a well-known password, so this refuses to run outside local and testing.
      */
     public function run(): void
     {
+        if (! app()->environment('local', 'testing')) {
+            throw new RuntimeException('TestUserSeeder is restricted to local and testing environments. Use `php artisan app:create-admin` to create the first administrator.');
+        }
+
         $users = [
             ['name' => 'Administrator', 'email' => 'admin@aquaops.test', 'role' => 'administrator'],
             ['name' => 'Production Manager', 'email' => 'prodmgr@aquaops.test', 'role' => 'production-manager'],

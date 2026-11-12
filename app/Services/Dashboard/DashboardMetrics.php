@@ -3,11 +3,14 @@
 namespace App\Services\Dashboard;
 
 use App\Models\AuditLog;
+use App\Models\Equipment;
 use App\Models\Invoice;
 use App\Models\LeakageReport;
+use App\Models\MaintenancePlan;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductionSchedule;
+use App\Models\WorkOrder;
 use App\Services\Forecasting\ForecastOverview;
 use App\Services\Inventory\StockService;
 use App\Services\Invoicing\InvoiceStatus;
@@ -250,6 +253,74 @@ class DashboardMetrics
     /**
      * @return Collection<int|string, mixed>
      */
+    /**
+     * Active preventive plans that are overdue or due within the next seven days, soonest first.
+     *
+     * @return array{overdue: Collection<int, MaintenancePlan>, dueThisWeek: Collection<int, MaintenancePlan>}
+     */
+    public function maintenanceDue(): array
+    {
+        return $this->memo[__FUNCTION__] ??= (function (): array {
+            $plans = MaintenancePlan::query()
+                ->with('equipment:id,code,name')
+                ->where('active', true)
+                ->whereDate('next_due_on', '<=', today()->addDays(7)->toDateString())
+                ->orderBy('next_due_on')
+                ->orderBy('id')
+                ->get();
+
+            return [
+                'overdue' => $plans->filter(fn (MaintenancePlan $plan): bool => $plan->next_due_on->lessThan(today()))->values(),
+                'dueThisWeek' => $plans->reject(fn (MaintenancePlan $plan): bool => $plan->next_due_on->lessThan(today()))->values(),
+            ];
+        })();
+    }
+
+    /**
+     * Open and in-progress work orders, urgent first.
+     *
+     * @return array{open: int, inProgress: int, urgent: int, latest: Collection<int, WorkOrder>}
+     */
+    public function openWorkOrders(): array
+    {
+        return $this->memo[__FUNCTION__] ??= (function (): array {
+            $counts = WorkOrder::query()
+                ->whereIn('status', WorkOrder::ACTIVE_STATUSES)
+                ->selectRaw("status, COUNT(*) as aggregate, SUM(CASE WHEN priority = 'urgent' THEN 1 ELSE 0 END) as urgent")
+                ->groupBy('status')
+                ->get()
+                ->keyBy('status');
+
+            return [
+                'open' => (int) ($counts['open']->aggregate ?? 0),
+                'inProgress' => (int) ($counts['in_progress']->aggregate ?? 0),
+                'urgent' => (int) $counts->sum('urgent'),
+                'latest' => WorkOrder::query()
+                    ->with('equipment:id,code,name')
+                    ->whereIn('status', WorkOrder::ACTIVE_STATUSES)
+                    ->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'normal' THEN 1 ELSE 2 END")
+                    ->oldest()
+                    ->limit(3)
+                    ->get(['id', 'reference', 'equipment_id', 'priority', 'status', 'created_at']),
+            ];
+        })();
+    }
+
+    /**
+     * Equipment that isn't operational, worst first.
+     *
+     * @return Collection<int, Equipment>
+     */
+    public function equipmentNotOperational(): Collection
+    {
+        return $this->memo[__FUNCTION__] ??= Equipment::query()
+            ->with('productionLine:id,name')
+            ->where('status', '!=', 'operational')
+            ->orderByRaw("CASE status WHEN 'out_of_service' THEN 0 WHEN 'under_maintenance' THEN 1 ELSE 2 END")
+            ->orderBy('code')
+            ->get(['id', 'code', 'name', 'status', 'production_line_id', 'updated_at']);
+    }
+
     private function stockOnHand(): Collection
     {
         return $this->memo[__FUNCTION__] ??= DB::table('warehouse_stock')

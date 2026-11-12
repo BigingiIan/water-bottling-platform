@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\ProductionLine;
 use App\Models\ProductionSchedule;
 use App\Models\User;
+use App\Support\CsvCell;
 use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -61,13 +62,13 @@ class ProductionHistory extends Component
 
         return response()->streamDownload(function () use ($schedules): void {
             $output = fopen('php://output', 'w');
-            fputcsv($output, ['date', 'time', 'sku', 'line', 'target', 'actual', 'variance_pct', 'entries', 'flagged', 'status']);
+            fputcsv($output, CsvCell::escapeRow(['date', 'time', 'sku', 'line', 'target', 'actual', 'variance_pct', 'entries', 'flagged', 'status']));
 
             foreach ($schedules as $schedule) {
                 $actual = (int) ($schedule->logs_sum_units_logged ?? 0);
                 $target = (int) $schedule->target_units;
 
-                fputcsv($output, [
+                fputcsv($output, CsvCell::escapeRow([
                     $schedule->scheduled_date->toDateString(),
                     mb_substr((string) $schedule->scheduled_time, 0, 5),
                     $schedule->product_sku,
@@ -78,7 +79,7 @@ class ProductionHistory extends Component
                     $schedule->logs_count,
                     $schedule->flagged_logs_count,
                     $schedule->status,
-                ]);
+                ]));
             }
 
             fclose($output);
@@ -101,9 +102,9 @@ class ProductionHistory extends Component
         return view('livewire.production-history', [
             'schedules' => $schedules,
             'statusPresentation' => [
-                'complete' => ['label' => 'Complete', 'class' => 'bg-green-50 text-[#15803d]', 'dotClass' => 'bg-green-500'],
-                'active' => ['label' => 'Active', 'class' => 'bg-blue-50 text-[#1d4ed8]', 'dotClass' => 'bg-blue-500'],
-                'queued' => ['label' => 'Queued', 'class' => 'bg-gray-100 text-gray-600', 'dotClass' => 'bg-gray-400'],
+                'complete' => ['label' => 'Complete', 'class' => 'bg-success-soft text-success-ink', 'dotClass' => 'bg-success'],
+                'active' => ['label' => 'Active', 'class' => 'bg-accent-soft text-accent-ink', 'dotClass' => 'bg-accent'],
+                'queued' => ['label' => 'Queued', 'class' => 'bg-surface-strong text-fg-soft', 'dotClass' => 'bg-subtle'],
             ],
             'skus' => ProductionSchedule::query()->distinct()->orderBy('product_sku')->pluck('product_sku'),
             'lines' => ProductionLine::query()->orderBy('name')->get(),

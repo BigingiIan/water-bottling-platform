@@ -19,4 +19,12 @@ class ProductionLine extends Model
     {
         return $this->hasMany(ProductionSchedule::class);
     }
+
+    /**
+     * @return HasMany<Equipment, $this>
+     */
+    public function equipment(): HasMany
+    {
+        return $this->hasMany(Equipment::class);
+    }
 }

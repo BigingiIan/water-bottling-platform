@@ -24,8 +24,10 @@ class ProductCatalogSeederTest extends TestCase
         $this->assertSame('1.000', $products['1L']->volume_litres);
         $this->assertSame('20.000', $products['20L']->volume_litres);
 
+        $products['5L']->update(['unit_price_kes' => '135.00']);
         app(ProductCatalogSeeder::class)->run();
         $this->assertSame(5, Product::query()->count());
+        $this->assertSame('135.00', $products['5L']->refresh()->unit_price_kes, 'A price an operator changed is kept.');
     }
 
     /**

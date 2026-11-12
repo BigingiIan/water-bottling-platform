@@ -17,6 +17,10 @@ use Illuminate\View\View;
 
 class AuthenticatedSessionController extends Controller
 {
+    public const SPLASH_SESSION_KEY = 'auth.splash_pending';
+
+    public const EXPIRED_TEMPORARY_PASSWORD_MESSAGE = 'This temporary password has expired. Ask an administrator for a new invitation.';
+
     public function create(): View
     {
         return view('auth.login');
@@ -71,8 +75,21 @@ class AuthenticatedSessionController extends Controller
             ]);
         }
 
+        if ($user->must_change_password && $user->temporary_password_expires_at?->isPast()) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            RateLimiter::hit($throttleKey, 60);
+
+            throw ValidationException::withMessages([
+                'email' => self::EXPIRED_TEMPORARY_PASSWORD_MESSAGE,
+            ]);
+        }
+
         RateLimiter::clear($throttleKey);
         $request->session()->regenerate();
+        // Taken by the first full page after sign-in, so the splash shows once per session.
+        $request->session()->put(self::SPLASH_SESSION_KEY, true);
 
         if ($user->must_change_password) {
             return redirect()->route('password.set');

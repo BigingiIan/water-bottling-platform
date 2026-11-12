@@ -122,14 +122,18 @@ class RolePermissionMatrix extends Component
                 'slug' => $this->uniqueSlug($validated['name']),
                 'description' => $validated['description'] ?? null,
             ]);
-            // Every role may send and receive requests; everything else starts closed.
+            // Every role may send and receive requests and read the business calendar; everything else starts closed.
             $permissions = Module::query()
                 ->orderBy('id')
                 ->pluck('slug', 'id')
                 ->map(fn (string $slug, int $moduleId): array => [
                     'role_id' => $newRole->id,
                     'module_id' => $moduleId,
-                    'access_level' => $slug === 'requests' ? 'full' : 'none',
+                    'access_level' => match ($slug) {
+                        'requests' => 'full',
+                        'calendar' => 'view',
+                        default => 'none',
+                    },
                 ])
                 ->values()
                 ->all();
@@ -397,11 +401,11 @@ class RolePermissionMatrix extends Component
             'deletingRoleUsersUrl' => $this->deleteRoleUsersUrl($deletingRole),
             'canManageRoles' => app(ModuleAccess::class)->can($user, 'users-roles', write: true),
             'rolePresentation' => [
-                'administrator' => ['label' => 'Admin', 'class' => 'bg-red-50 text-[#b91c1c]'],
-                'production-manager' => ['label' => 'Prod. Mgr', 'class' => 'bg-blue-50 text-[#1d4ed8]'],
-                'production-staff' => ['label' => 'Prod. Staff', 'class' => 'bg-teal-50 text-[#0f766e]'],
-                'inventory-staff' => ['label' => 'Inventory', 'class' => 'bg-amber-100 text-[#92400e]'],
-                'maintenance-staff' => ['label' => 'Maintenance', 'class' => 'bg-purple-100 text-[#7e22ce]'],
+                'administrator' => ['label' => 'Admin', 'class' => 'bg-danger-soft text-danger-ink'],
+                'production-manager' => ['label' => 'Prod. Mgr', 'class' => 'bg-accent-soft text-accent-ink'],
+                'production-staff' => ['label' => 'Prod. Staff', 'class' => 'bg-tag-soft text-tag-ink'],
+                'inventory-staff' => ['label' => 'Inventory', 'class' => 'bg-warning-soft text-warning-ink'],
+                'maintenance-staff' => ['label' => 'Maintenance', 'class' => 'bg-highlight-soft text-highlight-ink'],
             ],
             'accessPresentation' => $accessPresentation,
         ]);

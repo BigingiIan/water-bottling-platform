@@ -19,6 +19,8 @@ class DatabaseSeeder extends Seeder
             ModuleSeeder::class,
             RoleModulePermissionSeeder::class,
             ProductionLineSeeder::class,
+            ProductCatalogSeeder::class,
+            PublicHolidaySeeder::class,
             DailySkuFeatureSeeder::class,
         ]);
 

@@ -40,7 +40,7 @@ class HelpCentreTest extends TestCase
             ->assertSee('Asking another department for something')
             ->viewData('moduleGuides');
 
-        $this->assertSame(['dashboard', 'inventory', 'orders', 'requests'], array_keys($guides));
+        $this->assertSame(['dashboard', 'inventory', 'orders', 'calendar', 'requests'], array_keys($guides));
         $this->get(route('help'))
             ->assertOk()
             ->assertDontSee('Schedule a production run')
@@ -96,7 +96,7 @@ class HelpCentreTest extends TestCase
             ->assertSee('Dispatch an order')
             ->viewData('searchResults');
         $this->assertNotEmpty($results);
-        $this->assertSame([], array_values(array_diff(array_unique(array_column($results, 'guide')), ['orders', 'dashboard', 'inventory', 'requests', 'getting-started', 'asking-another-department'])));
+        $this->assertSame([], array_values(array_diff(array_unique(array_column($results, 'guide')), ['orders', 'dashboard', 'inventory', 'calendar', 'requests', 'getting-started', 'asking-another-department'])));
 
         $this->actingAs($this->userWithRole('production-staff'));
 

@@ -1,0 +1,108 @@
+{
+  "ensemble_mode": "prophet_only",
+  "evaluation_protocol": {
+    "data": "synthetic (generator seed 42); not a real-world accuracy estimate",
+    "fold_step_days": 28,
+    "folds": 6,
+    "headline_horizon_days": 1,
+    "max_horizon_days": 28,
+    "origins_per_fold": 28,
+    "reported_estimate": "Prophet h=1 RMSE on the single final_test pass, pre-refit models",
+    "scheme": "rolling origin, expanding window",
+    "selection": "stacker variant and hyperparameters chosen on development folds inside meta_train",
+    "temperature": "monthly mean of the training rows"
+  },
+  "final_test_estimate": {
+    "MAPE_fold_sd": 1.6738,
+    "MAPE_mean": 12.7047,
+    "RMSE_fold_sd": 6.71,
+    "RMSE_mean": 52.9096,
+    "folds": 6,
+    "horizon_days": 1,
+    "model": "Prophet",
+    "sMAPE_fold_sd": 1.5286,
+    "sMAPE_mean": 12.4121,
+    "window_end": "2025-12-06",
+    "window_start": "2025-05-26"
+  },
+  "library_versions": {
+    "cmdstanpy": "1.3.0",
+    "numpy": "2.4.6",
+    "pandas": "3.0.5",
+    "prophet": "1.4.0",
+    "python": "3.11.16",
+    "scikit-learn": "1.9.0",
+    "tensorflow": "2.21.0",
+    "xgboost": "3.2.0"
+  },
+  "lstm_config": {
+    "dropout": 0.2,
+    "epochs": 15,
+    "lookback": 14,
+    "units": [
+      64,
+      32
+    ]
+  },
+  "lstm_lookback": 14,
+  "model_version": "2026-10-23T01:31:11Z",
+  "prophet_config": {
+    "changepoint_prior_scale": 0.05,
+    "regressor_prior_scale": 10.0,
+    "seasonality_mode": "additive",
+    "yearly_seasonality": "auto"
+  },
+  "prophet_regressors": [
+    "is_promotion",
+    "is_public_holiday",
+    "is_school_term",
+    "temperature_c"
+  ],
+  "rmse_score": 52.9096,
+  "rmse_score_source": "Prophet h=1 RMSE on final_test, mean over 6 rolling-origin folds, models fitted before final_test",
+  "seed": 21,
+  "stacker_intercept": 0.0,
+  "stacker_weights": {
+    "lstm": 0.0,
+    "prophet": 1.0,
+    "xgboost": 0.0
+  },
+  "temperature_climatology": {
+    "1": 26.19032258064516,
+    "10": 25.151612903225807,
+    "11": 24.434444444444445,
+    "12": 25.6247311827957,
+    "2": 27.701176470588234,
+    "3": 27.070967741935483,
+    "4": 25.017777777777777,
+    "5": 23.416129032258063,
+    "6": 22.48777777777778,
+    "7": 21.203225806451613,
+    "8": 22.0,
+    "9": 23.92888888888889
+  },
+  "temperature_source": "monthly_mean",
+  "training_end": "2025-12-31",
+  "training_rows": 1096,
+  "training_start": "2023-01-01",
+  "xgboost_config": {
+    "learning_rate": 0.05,
+    "max_depth": 2,
+    "n_estimators": 400,
+    "subsample": 0.6
+  },
+  "xgboost_feature_cols": [
+    "is_promotion",
+    "is_public_holiday",
+    "is_school_term",
+    "temperature_c",
+    "lag_1",
+    "lag_7",
+    "lag_14",
+    "rolling_mean_7",
+    "rolling_std_7",
+    "rolling_mean_14",
+    "rolling_std_14",
+    "day_of_week"
+  ]
+}

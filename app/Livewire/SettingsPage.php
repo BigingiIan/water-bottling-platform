@@ -5,8 +5,11 @@ namespace App\Livewire;
 use App\Models\AuditLog;
 use App\Models\ForecastRecord;
 use App\Models\User;
+use App\Services\AppearanceService;
 use App\Services\SettingsService;
 use App\Services\UserPreferenceService;
+use App\Support\Appearance\Palette;
+use App\Support\Branding;
 use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -17,14 +20,17 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 
 #[Layout('components.app-layout', ['title' => 'Settings', 'breadcrumbSection' => 'System', 'activeItem' => 'Settings'])]
 class SettingsPage extends Component
 {
+    use WithFileUploads;
     use WithPagination;
 
-    private const TABS = ['general', 'operations', 'forecasting', 'invoicing', 'notifications', 'security', 'audit'];
+    private const TABS = ['general', 'appearance', 'operations', 'forecasting', 'invoicing', 'notifications', 'security', 'audit'];
 
     #[Url(as: 'tab', except: 'general')]
     public string $activeTab = 'general';
@@ -43,6 +49,11 @@ class SettingsPage extends Component
     public string $auditDateTo = '';
 
     public bool $showResetModal = false;
+
+    /**
+     * A new organisation logo, saved with saveLogo().
+     */
+    public ?TemporaryUploadedFile $logoUpload = null;
 
     #[Locked]
     public ?string $resetTab = null;
@@ -100,7 +111,7 @@ class SettingsPage extends Component
         $values = [];
 
         foreach ($this->visibleDefinitions($settings) as $key => $definition) {
-            if (($definition['readonly'] ?? false) === true) {
+            if (($definition['readonly'] ?? false) === true || $definition['input'] === 'logo') {
                 continue;
             }
 
@@ -110,6 +121,7 @@ class SettingsPage extends Component
         $settings->setMany($values, $user);
         $this->fillValues($settings);
         $this->resetValidation();
+        $this->dispatchAppearance();
         $this->dispatch('settings-saved', message: 'Settings saved.');
     }
 
@@ -130,7 +142,8 @@ class SettingsPage extends Component
         $keys = [];
 
         foreach ($this->visibleDefinitions($settings, $this->resetTab) as $key => $definition) {
-            if (($definition['readonly'] ?? false) !== true) {
+            // The logo has its own Remove button; resetting the tab leaves it alone.
+            if (($definition['readonly'] ?? false) !== true && $definition['input'] !== 'logo') {
                 $keys[] = $key;
             }
         }
@@ -141,7 +154,32 @@ class SettingsPage extends Component
         $this->showResetModal = false;
         $this->resetTab = null;
         $this->resetValidation();
+        $this->dispatchAppearance();
         $this->dispatch('settings-saved', message: 'Defaults restored.');
+    }
+
+    public function saveLogo(Branding $branding): void
+    {
+        $user = $this->authorizeSettings(write: true);
+
+        $this->validate([
+            // No SVG: an uploaded SVG can carry script.
+            'logoUpload' => ['required', 'file', 'image', 'mimes:png,jpg,jpeg,webp', 'max:256', 'dimensions:max_width=1024,max_height=1024'],
+        ], [], ['logoUpload' => 'logo']);
+
+        $branding->storeLogo($this->logoUpload, $user);
+        $this->logoUpload = null;
+        $this->dispatch('settings-saved', message: 'Logo updated.');
+    }
+
+    public function removeLogo(Branding $branding): void
+    {
+        $user = $this->authorizeSettings(write: true);
+
+        $branding->removeLogo($user);
+        $this->logoUpload = null;
+        $this->resetValidation('logoUpload');
+        $this->dispatch('settings-saved', message: 'Logo removed.');
     }
 
     public function closeResetModal(): void
@@ -182,7 +220,24 @@ class SettingsPage extends Component
             'auditActions' => $showAudit ? DB::table('audit_log')->select('action')->distinct()->orderBy('action')->pluck('action') : collect(),
             'modelVersion' => $showForecastInfo ? $this->modelVersion() : '—',
             'lastForecastRunAt' => $showForecastInfo ? ForecastRecord::query()->max('generated_at') : null,
+            'logoUrl' => $this->activeTab === 'general' ? app(Branding::class)->logoUrl() : null,
+            'previewProfiles' => $this->activeTab === 'appearance' ? app(Palette::class)->profiles() : [],
         ]);
+    }
+
+    /**
+     * Repaints the open page when the organisation default changes what this user sees.
+     */
+    private function dispatchAppearance(): void
+    {
+        $appearance = app(AppearanceService::class)->resolve(auth()->user());
+
+        $this->dispatch(
+            'appearance-changed',
+            theme: $appearance['theme'],
+            profile: $appearance['profile'],
+            stylesheet: app(Palette::class)->rootStylesheet($appearance['profile'], $appearance['theme']),
+        );
     }
 
     private function authorizeSettings(bool $write = false): User

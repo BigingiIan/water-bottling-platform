@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\ProductionBatch;
 use App\Models\StockCount;
 use App\Services\SettingsService;
+use Closure;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
@@ -107,24 +108,50 @@ class LeakageDetector
             throw new InvalidArgumentException("Product {$product->unit_type} has no volume, so logged litres cannot be computed.");
         }
 
-        $loggedUnits = (int) $run->logs()->sum('units_logged');
-        $loggedLitres = bcmul((string) $loggedUnits, $this->decimal($product->volume_litres), self::SCALE);
-        $raw = $this->decimal($batch->raw_water_volume);
+        return $this->assessProcess(
+            batchReference: $batch->reference(),
+            sku: $product->unit_type,
+            lineName: $run->productionLine?->name,
+            rawWaterVolume: (string) $batch->raw_water_volume,
+            meteredBottledVolume: (string) $batch->bottled_volume,
+            loggedUnits: (int) $run->logs()->sum('units_logged'),
+            volumeLitres: (string) $product->volume_litres,
+            anomaly: fn (float $lossPercent): AnomalyAssessment => $this->anomalyFor($product, $run->production_line_id, $lossPercent, $batch->id),
+        );
+    }
+
+    /**
+     * Stage A arithmetic for figures already in hand; the anomaly callback receives the loss % beyond normal.
+     *
+     * @param  Closure(float): AnomalyAssessment  $anomaly
+     */
+    public function assessProcess(
+        string $batchReference,
+        string $sku,
+        ?string $lineName,
+        string $rawWaterVolume,
+        string $meteredBottledVolume,
+        int $loggedUnits,
+        string $volumeLitres,
+        Closure $anomaly,
+    ): ProcessLossAssessment {
+        $loggedLitres = bcmul((string) $loggedUnits, $this->decimal($volumeLitres), self::SCALE);
+        $raw = $this->decimal($rawWaterVolume);
         $normalLoss = $this->normalLossPercent();
         $expected = bcmul($raw, bcsub('1', bcdiv($normalLoss, '100', 6), 6), self::SCALE);
         $lossLitres = bcsub($expected, $loggedLitres, self::SCALE);
         // Loss beyond normal, as a share of what should have been bottled; this is what thresholds apply to.
         $lossPercent = bccomp($expected, '0', self::SCALE) > 0 ? $this->percentOf($lossLitres, $expected) : null;
         $totalLossPercent = bccomp($raw, '0', self::SCALE) > 0 ? $this->percentOf(bcsub($raw, $loggedLitres, self::SCALE), $raw) : null;
-        $metered = $this->decimal($batch->bottled_volume);
+        $metered = $this->decimal($meteredBottledVolume);
         $gapPercent = bccomp($metered, '0', self::SCALE) > 0
             ? $this->percentOf(ltrim(bcsub($metered, $loggedLitres, self::SCALE), '-'), $metered)
             : null;
 
         return new ProcessLossAssessment(
-            batchReference: $batch->reference(),
-            sku: $product->unit_type,
-            lineName: $run->productionLine?->name,
+            batchReference: $batchReference,
+            sku: $sku,
+            lineName: $lineName,
             rawLitres: $raw,
             normalLossPercent: $normalLoss,
             expectedLitres: $expected,
@@ -136,7 +163,7 @@ class LeakageDetector
             lossSeverity: $this->severityFor($lossPercent),
             anomaly: $lossPercent === null
                 ? new AnomalyAssessment('skipped', null, 0, null, reason: 'no intake volume recorded')
-                : $this->anomalyFor($product, $run->production_line_id, (float) $lossPercent, $batch->id),
+                : $anomaly((float) $lossPercent),
             meteredLitres: $metered,
             gapPercent: $gapPercent,
             gapSeverity: $this->severityFor($gapPercent),
@@ -149,11 +176,27 @@ class LeakageDetector
      */
     public function anomalyFor(Product $product, ?int $lineId, float $lossPercent, ?int $excludeBatchId = null): AnomalyAssessment
     {
-        $baseline = $lineId === null ? [] : $this->baselineLosses($product, $lineId, $excludeBatchId);
+        return $this->anomalyAgainst(
+            $lineId === null ? [] : $this->baselineLosses($product, $lineId, $excludeBatchId),
+            $this->baselineLosses($product, null, $excludeBatchId),
+            $lossPercent,
+        );
+    }
+
+    /**
+     * The robust z-score against the product-and-line baseline, or the product baseline when the line has
+     * too little history. Baselines are loss percentages of earlier batches, newest first.
+     *
+     * @param  array<int, float>  $lineBaseline
+     * @param  array<int, float>  $productBaseline
+     */
+    public function anomalyAgainst(array $lineBaseline, array $productBaseline, float $lossPercent): AnomalyAssessment
+    {
+        $baseline = array_slice($lineBaseline, 0, AnomalyAssessment::BASELINE_BATCHES);
         $scope = 'product and line';
 
         if (count($baseline) < AnomalyAssessment::MINIMUM_BATCHES) {
-            $baseline = $this->baselineLosses($product, null, $excludeBatchId);
+            $baseline = array_slice($productBaseline, 0, AnomalyAssessment::BASELINE_BATCHES);
             $scope = 'product';
         }
 

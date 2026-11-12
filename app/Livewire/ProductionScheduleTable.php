@@ -95,9 +95,9 @@ class ProductionScheduleTable extends Component
                 ->orderBy('product_sku')
                 ->pluck('product_sku'),
             'statusPresentation' => [
-                'complete' => ['label' => 'Complete', 'class' => 'bg-green-50 text-[#15803d]', 'dotClass' => 'bg-green-500', 'barClass' => 'bg-green-500'],
-                'active' => ['label' => 'Active', 'class' => 'bg-blue-50 text-[#1d4ed8]', 'dotClass' => 'bg-blue-500', 'barClass' => 'bg-blue-500'],
-                'queued' => ['label' => 'Queued', 'class' => 'bg-gray-100 text-gray-600', 'dotClass' => 'bg-gray-400', 'barClass' => 'bg-blue-500'],
+                'complete' => ['label' => 'Complete', 'class' => 'bg-success-soft text-success-ink', 'dotClass' => 'bg-success', 'barClass' => 'bg-success'],
+                'active' => ['label' => 'Active', 'class' => 'bg-accent-soft text-accent-ink', 'dotClass' => 'bg-accent', 'barClass' => 'bg-accent'],
+                'queued' => ['label' => 'Queued', 'class' => 'bg-surface-strong text-fg-soft', 'dotClass' => 'bg-subtle', 'barClass' => 'bg-accent'],
             ],
             'totalTarget' => $schedules->sum('target_units'),
             'totalActual' => $schedules->sum('logs_sum_units_logged'),
@@ -194,7 +194,7 @@ class ProductionScheduleTable extends Component
                 $pct = (int) round(($target - $actual) / $target * 100);
                 if ($pct >= 5) {
                     $alerts[] = [
-                        'color' => 'bg-amber-500',
+                        'color' => 'bg-warning',
                         'html' => '<b>'.e($run->productionLine?->name ?? 'Line').'</b> running '.$pct.'% below target pace',
                         'time' => $run->updated_at?->diffForHumans() ?? 'recently',
                     ];
@@ -209,7 +209,7 @@ class ProductionScheduleTable extends Component
             && ($forecastComparison['isBelow'] ?? false)
         ) {
             $alerts[] = [
-                'color' => 'bg-blue-500',
+                'color' => 'bg-accent',
                 'html' => 'Forecast suggests increasing '.e($forecastComparison['sku']).' target by '.number_format($forecastComparison['shortfall']).' units',
                 'time' => 'live forecast',
             ];
@@ -218,7 +218,7 @@ class ProductionScheduleTable extends Component
         $completed = $daySchedules->where('status', 'complete')->sortByDesc('updated_at')->first();
         if ($completed instanceof ProductionSchedule) {
             $alerts[] = [
-                'color' => 'bg-green-500',
+                'color' => 'bg-success',
                 'html' => '<b>'.e($completed->productionLine?->name ?? 'Line').'</b> completed '.e($completed->product_sku).' run on target',
                 'time' => $completed->updated_at?->diffForHumans() ?? 'recently',
             ];

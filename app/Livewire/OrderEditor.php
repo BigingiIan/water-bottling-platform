@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Exceptions\Orders\InvalidOrderTransitionException;
 use App\Exceptions\Orders\OrderStockShortageException;
 use App\Models\Customer;
 use App\Models\Order;
@@ -14,6 +15,7 @@ use App\Services\Orders\StockAvailability;
 use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Validation\Rule;
+use InvalidArgumentException;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -21,6 +23,8 @@ use Livewire\Component;
 #[Layout('components.app-layout', ['title' => 'Order', 'breadcrumbSection' => 'Orders', 'activeItem' => 'Orders'])]
 class OrderEditor extends Component
 {
+    private const CHANGED_ELSEWHERE_MESSAGE = 'This order was changed elsewhere; reload to see the latest.';
+
     #[Locked]
     public ?int $orderId = null;
 
@@ -98,6 +102,11 @@ class OrderEditor extends Component
     public function saveDraft(OrderService $orders): void
     {
         $order = $this->persistDraft($orders);
+
+        if ($order === null) {
+            return;
+        }
+
         session()->flash('status', "{$order->order_number} saved as a draft.");
         $this->redirectRoute('orders.show', $order);
     }
@@ -106,8 +115,16 @@ class OrderEditor extends Component
     {
         $order = $this->persistDraft($orders);
 
+        if ($order === null) {
+            return;
+        }
+
         try {
             $orders->confirm($order, $this->authorizeWrite());
+        } catch (InvalidOrderTransitionException) {
+            $this->addError('confirm', self::CHANGED_ELSEWHERE_MESSAGE);
+
+            return;
         } catch (OrderStockShortageException $exception) {
             $this->shortages = $order->items()->get()
                 ->filter(fn ($item): bool => array_key_exists($item->id, $exception->shortages))
@@ -178,7 +195,11 @@ class OrderEditor extends Component
         ]);
     }
 
-    private function persistDraft(OrderService $orders): Order
+    /**
+     * Validates and saves the form as a draft. Returns null, with a validation message, when the order is no
+     * longer a draft because it was confirmed or cancelled in another tab or by another user.
+     */
+    private function persistDraft(OrderService $orders): ?Order
     {
         $user = $this->authorizeWrite();
         $this->shortages = [];
@@ -201,14 +222,21 @@ class OrderEditor extends Component
             $quantities[(int) $line['product_id']] = (int) $line['quantity'];
         }
 
-        $order = $orders->saveDraft(
-            $this->orderId === null ? null : Order::query()->findOrFail($this->orderId),
-            Customer::query()->findOrFail((int) $validated['customerId']),
-            $quantities,
-            $validated['requestedDate'] ?: null,
-            $validated['notes'] ?: null,
-            $user,
-        );
+        try {
+            $order = $orders->saveDraft(
+                $this->orderId === null ? null : Order::query()->findOrFail($this->orderId),
+                Customer::query()->findOrFail((int) $validated['customerId']),
+                $quantities,
+                $validated['requestedDate'] ?: null,
+                $validated['notes'] ?: null,
+                $user,
+            );
+        } catch (InvalidArgumentException|InvalidOrderTransitionException) {
+            $this->addError('confirm', self::CHANGED_ELSEWHERE_MESSAGE);
+
+            return null;
+        }
+
         $this->orderId = $order->id;
 
         return $order;

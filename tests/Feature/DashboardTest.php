@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Livewire\Dashboard;
 use App\Models\ForecastRecord;
 use App\Models\LeakageReport;
+use App\Models\Module;
 use App\Models\Product;
 use App\Models\ProductionBatch;
 use App\Models\ProductionLine;
@@ -89,9 +90,22 @@ class DashboardTest extends TestCase
 
     public function test_role_without_module_cards_only_sees_notifications_and_guidance(): void
     {
-        $maintenance = $this->userWithRole('maintenance-staff');
-        $maintenance->notify($this->notification('Pump service due', 'test:pump'));
-        $this->actingAs($maintenance);
+        // A role with only the dashboard and requests, the case Maintenance Staff were in before their module existed.
+        $role = Role::query()->create(['name' => 'Visitor', 'slug' => 'visitor']);
+        foreach (Module::query()->get(['id', 'slug']) as $module) {
+            DB::table('role_module_permissions')->insert([
+                'role_id' => $role->id,
+                'module_id' => $module->id,
+                'access_level' => match ($module->slug) {
+                    'dashboard' => 'view',
+                    'requests' => 'full',
+                    default => 'none',
+                },
+            ]);
+        }
+        $visitor = User::factory()->create(['role_id' => $role->id]);
+        $visitor->notify($this->notification('Pump service due', 'test:pump'));
+        $this->actingAs($visitor);
 
         Livewire::test(Dashboard::class)
             ->assertSee('Pump service due')

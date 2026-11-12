@@ -14,6 +14,7 @@ class DailySkuFeature extends Model
         'is_school_term',
         'sales_data_covered',
         'temperature_c',
+        'temperature_source',
     ];
 
     protected $casts = [

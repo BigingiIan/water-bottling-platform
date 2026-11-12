@@ -71,6 +71,14 @@ class UserActionsModal extends Component
                 return $target;
             }
 
+            $grantsAdministrator = Role::query()->whereKey($validated['roleId'])->value('slug') === 'administrator';
+
+            if (($grantsAdministrator || $this->isAdministrator($target)) && ! $this->isAdministrator($actor)) {
+                $this->addError('roleId', 'Only an Administrator can grant or remove the Administrator role.');
+
+                return null;
+            }
+
             if ($this->isLastActiveAdministrator($target)) {
                 $this->addError('roleId', 'The last active Administrator cannot have their role changed.');
 
@@ -113,6 +121,12 @@ class UserActionsModal extends Component
             $this->lockActiveAdministrators();
             $target = User::query()->lockForUpdate()->findOrFail($validated['targetUserId']);
             $suspending = $target->status !== 'suspended';
+
+            if ($this->isAdministrator($target) && ! $this->isAdministrator($actor)) {
+                $this->addError('suspend', 'Only an Administrator can suspend or reactivate an Administrator.');
+
+                return null;
+            }
 
             if ($suspending && $actor->is($target)) {
                 $this->addError('suspend', 'You cannot suspend your own account.');
@@ -161,6 +175,13 @@ class UserActionsModal extends Component
         ]);
 
         $target = User::query()->findOrFail($validated['targetUserId']);
+
+        if ($this->isAdministrator($target) && ! $this->isAdministrator($actor)) {
+            $this->addError('reset', "Only an Administrator can reset an Administrator's password.");
+
+            return;
+        }
+
         $temporaryPassword = Str::random(16);
 
         DB::transaction(function () use ($actor, $target, $temporaryPassword): void {
@@ -170,6 +191,7 @@ class UserActionsModal extends Component
             $target->forceFill([
                 'password_hash' => Hash::make($temporaryPassword),
                 'must_change_password' => true,
+                'temporary_password_expires_at' => now()->addHours(InviteUserModal::TEMPORARY_PASSWORD_LIFETIME_HOURS),
             ])->save();
 
             DB::table('sessions')->where('user_id', $target->id)->delete();
@@ -227,6 +249,11 @@ class UserActionsModal extends Component
         app(ModuleAccess::class)->authorize($user, 'users-roles', write: true);
 
         return $user;
+    }
+
+    private function isAdministrator(User $user): bool
+    {
+        return $user->role?->slug === 'administrator';
     }
 
     private function isLastActiveAdministrator(User $target): bool

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Customer;
 use App\Models\DailySkuFeature;
 use App\Models\Role;
+use App\Models\SchoolTerm;
 use App\Models\User;
 use App\Services\Forecasting\ForecastReadiness;
 use App\Services\Forecasting\ForecastStatus;
@@ -47,6 +48,7 @@ class ForecastingDemoSeederTest extends TestCase
             ]));
         }
         config(['services.ml_forecast.model_dir' => $this->modelDirectory]);
+        SchoolTerm::factory()->create(['year' => 2026, 'term' => 3, 'start_date' => '2026-08-25', 'end_date' => '2026-10-31']);
     }
 
     protected function tearDown(): void

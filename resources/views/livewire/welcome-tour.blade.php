@@ -54,7 +54,7 @@
             x-on:keydown.escape.window="close()"
             class="fixed inset-0 z-[60]"
         >
-            <div class="absolute inset-0 transition-colors" x-bind:class="highlighted ? 'bg-transparent' : 'bg-gray-900/40'" aria-hidden="true" x-on:click="close()"></div>
+            <div class="absolute inset-0 transition-colors" x-bind:class="highlighted ? 'bg-transparent' : 'bg-overlay'" aria-hidden="true" x-on:click="close()"></div>
 
             <section
                 x-ref="panel"
@@ -69,27 +69,27 @@
                     if ($event.shiftKey && document.activeElement === focusable[0]) { $event.preventDefault(); focusable[focusable.length - 1].focus(); }
                     else if (! $event.shiftKey && document.activeElement === focusable[focusable.length - 1]) { $event.preventDefault(); focusable[0].focus(); }
                 "
-                class="absolute w-auto max-w-[calc(100vw-24px)] rounded-lg border border-gray-200 bg-white p-5 shadow-xl focus:outline-none sm:w-[340px]"
+                class="absolute w-auto max-w-[calc(100vw-24px)] rounded-lg border border-border bg-surface p-5 shadow-xl focus:outline-none sm:w-[340px]"
             >
-                <p class="text-[11px] font-bold uppercase tracking-[0.4px] text-blue-700">
+                <p class="text-[11px] font-bold uppercase tracking-[0.4px] text-accent-ink">
                     {{ __('help.tour.label') }} ·
                     <span x-text="@js(__('help.tour.step_count', ['current' => '__current__', 'total' => '__total__'])).replace('__current__', index + 1).replace('__total__', steps.length)"></span>
                 </p>
-                <h2 id="welcome-tour-title" class="mt-1.5 text-base font-bold text-gray-900" x-text="step.title"></h2>
-                <p id="welcome-tour-body" class="mt-1.5 text-sm leading-6 text-gray-600" x-text="step.body"></p>
+                <h2 id="welcome-tour-title" class="mt-1.5 text-base font-bold text-fg" x-text="step.title"></h2>
+                <p id="welcome-tour-body" class="mt-1.5 text-sm leading-6 text-fg-soft" x-text="step.body"></p>
 
                 <div class="mt-4 flex items-center gap-1" aria-hidden="true">
                     <template x-for="(dot, dotIndex) in steps" x-bind:key="dot.key">
-                        <span class="h-1.5 rounded-full transition-all" x-bind:class="dotIndex === index ? 'w-5 bg-blue-600' : 'w-1.5 bg-gray-300'"></span>
+                        <span class="h-1.5 rounded-full transition-all" x-bind:class="dotIndex === index ? 'w-5 bg-accent' : 'w-1.5 bg-border-strong'"></span>
                     </template>
                 </div>
 
                 <div class="mt-4 flex items-center justify-between gap-2">
-                    <button type="button" x-on:click="close()" class="text-xs font-semibold text-gray-500 hover:text-gray-800">{{ __('help.tour.skip') }}</button>
+                    <button type="button" x-on:click="close()" class="text-xs font-semibold text-muted hover:text-fg">{{ __('help.tour.skip') }}</button>
                     <div class="flex gap-2">
-                        <button type="button" x-on:click="go(-1)" x-bind:disabled="index === 0" class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40">{{ __('help.tour.back') }}</button>
-                        <button type="button" x-show="! isLast" x-on:click="go(1)" class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">{{ __('help.tour.next') }}</button>
-                        <button type="button" x-show="isLast" x-on:click="close()" class="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">{{ __('help.tour.finish') }}</button>
+                        <button type="button" x-on:click="go(-1)" x-bind:disabled="index === 0" class="rounded-md border border-border-strong bg-surface px-3 py-1.5 text-xs font-semibold text-fg-soft hover:bg-surface-muted disabled:cursor-not-allowed disabled:opacity-40">{{ __('help.tour.back') }}</button>
+                        <button type="button" x-show="! isLast" x-on:click="go(1)" class="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent-hover">{{ __('help.tour.next') }}</button>
+                        <button type="button" x-show="isLast" x-on:click="close()" class="rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent-hover">{{ __('help.tour.finish') }}</button>
                     </div>
                 </div>
             </section>

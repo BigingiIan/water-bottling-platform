@@ -299,6 +299,13 @@ class InventoryOverview extends Component
         $report = LeakageReport::query()->findOrFail((int) $this->reviewingReportId);
         $from = $report->status;
 
+        // The modal may be stale: a resolved report stays resolved, and only open reports are acknowledged.
+        if ($from === 'resolved' || ($this->reviewAction !== 'resolve' && $from !== 'open')) {
+            $this->addError('reviewNote', 'This report was already '.$from.' by someone else. Close this dialog to see its current state.');
+
+            return;
+        }
+
         $report->update($this->reviewAction === 'resolve'
             ? ['status' => 'resolved', 'resolution_note' => $validated['reviewNote'], 'resolved_by' => $user->id, 'resolved_at' => now()]
             : ['status' => 'acknowledged', 'resolution_note' => $validated['reviewNote'] ?: $report->resolution_note, 'acknowledged_by' => $user->id, 'acknowledged_at' => now()]);
@@ -357,6 +364,20 @@ class InventoryOverview extends Component
             'adjustmentNote.min' => 'The note must be at least 5 characters.',
         ]);
 
+        // Write-offs only remove stock and returns only add it; a count correction may go either way.
+        $change = (int) $validated['adjustmentChange'];
+        $directionError = match ($validated['adjustmentReasonType']) {
+            'damaged', 'leakage_writeoff' => $change > 0 ? 'Damaged stock and leakage write-offs remove stock. Enter a negative quantity.' : null,
+            'customer_return' => $change < 0 ? 'A customer return adds stock. Enter a positive quantity.' : null,
+            default => null,
+        };
+
+        if ($directionError !== null) {
+            $this->addError('adjustmentChange', $directionError);
+
+            return;
+        }
+
         $movementType = match ($validated['adjustmentReasonType']) {
             'leakage_writeoff' => 'leakage_writeoff',
             'customer_return' => 'return',
@@ -409,8 +430,17 @@ class InventoryOverview extends Component
             'stockInProductId' => ['required', 'integer', Rule::exists('products', 'id')],
             'stockInBatchId' => ['required', 'integer', Rule::exists('production_batches', 'id')],
             'stockInLocation' => ['required', 'string', 'max:255'],
-            'stockInQuantity' => ['required', 'integer', 'min:1'],
+            'stockInQuantity' => ['required', 'integer', 'min:1', 'max:1000000'],
         ]);
+
+        // A batch from a production run only holds the product that run bottled.
+        $batchSku = ProductionBatch::query()->with('productionSchedule:id,product_sku')->find($validated['stockInBatchId'])?->productionSchedule?->product_sku;
+
+        if ($batchSku !== null && $batchSku !== Product::query()->whereKey($validated['stockInProductId'])->value('unit_type')) {
+            $this->addError('stockInProductId', "This batch bottled {$batchSku}. Choose that product or a different batch.");
+
+            return;
+        }
 
         try {
             DB::transaction(function () use ($validated, $user): void {
@@ -471,7 +501,7 @@ class InventoryOverview extends Component
             $productQuery->with(['forecastRecords' => function (HasMany $query): void {
                 $query->whereDate('forecast_date', today()->addDay())
                     ->where('horizon_days', 1)
-                    ->orderByDesc('model_version')
+                    ->orderByDesc('generated_at')
                     ->orderByDesc('id');
             }]);
         }
