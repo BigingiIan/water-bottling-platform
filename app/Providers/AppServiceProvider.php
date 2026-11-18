@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Exceptions\ViewAsReadOnlyException;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Models\DepartmentRequest;
 use App\Models\User;
@@ -13,12 +14,20 @@ use App\Services\MLForecastClient;
 use App\Services\SettingsService;
 use App\Services\UserPreferenceService;
 use App\Support\Dashboard\DashboardWidgetRegistry;
+use App\Support\Impersonation;
+use Closure;
+use Illuminate\Database\Connection;
+use Illuminate\Database\Events\ConnectionEstablished;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\View\View as ViewInstance;
+use Livewire\Component;
+use Livewire\Livewire;
+use Throwable;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -40,6 +49,29 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // View As is strictly read-only: refuse any write on every connection as it is established.
+        $guardConnection = function (Connection $connection): void {
+            $connection->beforeExecuting(function (string $query): void {
+                Impersonation::guardQuery($query);
+            });
+        };
+
+        foreach (DB::getConnections() as $connection) {
+            $guardConnection($connection);
+        }
+
+        Event::listen(ConnectionEstablished::class, function (ConnectionEstablished $event) use ($guardConnection): void {
+            $guardConnection($event->connection);
+        });
+
+        // A write refused by View As re-renders the component and raises a toast instead of an error page.
+        Livewire::listen('exception', function (mixed $component, Throwable $exception, Closure $stopPropagation): void {
+            if ($exception instanceof ViewAsReadOnlyException && $component instanceof Component) {
+                $component->dispatch('view-as-read-only');
+                $stopPropagation();
+            }
+        });
+
         if ($this->app->isProduction()) {
             URL::forceScheme('https');
         }
@@ -52,9 +84,9 @@ class AppServiceProvider extends ServiceProvider
 
         View::composer('components.app-layout', function (ViewInstance $view): void {
             $user = Auth::user();
-            $isImpersonating = session()->has('impersonator_id');
+            $isImpersonating = Impersonation::active();
             $impersonator = $isImpersonating
-                ? User::query()->find(session('impersonator_id'))
+                ? User::query()->find(Impersonation::impersonatorId())
                 : null;
             $canImpersonate = ! $isImpersonating
                 && $user?->status === 'active'

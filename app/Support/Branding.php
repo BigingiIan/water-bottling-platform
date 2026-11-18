@@ -60,6 +60,8 @@ class Branding
 
     public function storeLogo(UploadedFile $file, User $user): void
     {
+        Impersonation::ensureWritable();
+
         $previous = $this->logoPath();
         $path = $file->storeAs(self::DIRECTORY, 'logo-'.Str::lower(Str::random(16)).'.'.$file->extension(), $this->diskName());
 
@@ -72,6 +74,8 @@ class Branding
 
     public function removeLogo(User $user): void
     {
+        Impersonation::ensureWritable();
+
         $previous = $this->logoPath();
         $this->settings->set('organisation.logo', '', $user);
 

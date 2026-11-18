@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Support\Impersonation;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,7 +20,7 @@ class UserImpersonationController extends Controller
         abort_unless(
             $administrator?->role?->slug === 'administrator'
                 && $administrator->status === 'active'
-                && ! $request->session()->has('impersonator_id'),
+                && ! Impersonation::active(),
             403,
         );
 
@@ -37,18 +38,18 @@ class UserImpersonationController extends Controller
 
         $targetUser = User::query()->findOrFail($validated['user_id']);
 
-        $request->session()->put('impersonator_id', $administrator->getKey());
+        $request->session()->put(Impersonation::SESSION_KEY, $administrator->getKey());
         Auth::login($targetUser);
         $request->session()->regenerate();
 
-        $this->audit('impersonation.started', $administrator, $targetUser);
+        Impersonation::allowingWrites(fn () => $this->audit('impersonation.started', $administrator, $targetUser));
 
         return redirect()->route('dashboard');
     }
 
     public function destroy(Request $request): RedirectResponse
     {
-        $administratorId = $request->session()->get('impersonator_id');
+        $administratorId = $request->session()->get(Impersonation::SESSION_KEY);
         $administrator = User::query()
             ->with('role')
             ->whereKey($administratorId)
@@ -59,12 +60,12 @@ class UserImpersonationController extends Controller
 
         $targetUser = $request->user();
 
-        $request->session()->forget('impersonator_id');
+        $request->session()->forget(Impersonation::SESSION_KEY);
         Auth::login($administrator);
         $request->session()->regenerate();
 
         if ($targetUser instanceof User) {
-            $this->audit('impersonation.ended', $administrator, $targetUser);
+            Impersonation::allowingWrites(fn () => $this->audit('impersonation.ended', $administrator, $targetUser));
         }
 
         return redirect()->route('dashboard');

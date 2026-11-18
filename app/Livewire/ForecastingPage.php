@@ -12,6 +12,7 @@ use App\Services\Forecasting\ForecastOutcome;
 use App\Services\Forecasting\ForecastOverview;
 use App\Services\MLForecastClient;
 use App\Services\SettingsService;
+use App\Support\Impersonation;
 use App\Support\ModuleAccess;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonPeriod;
@@ -41,6 +42,7 @@ class ForecastingPage extends Component
     {
         $user = $this->user();
         app(ModuleAccess::class)->authorize($user, 'forecasting', write: true);
+        Impersonation::ensureWritable();
 
         $outcomes = $generator->generateTomorrow();
         $this->generationResults = $outcomes

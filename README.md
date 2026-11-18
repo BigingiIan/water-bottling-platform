@@ -72,7 +72,7 @@ Access is controlled per module. Each role has one of three levels per module: `
   - The Administrator role can never be reduced, and system roles can't be deleted.
 - Admin-created accounts only. An invited user is emailed a temporary password (not a link), valid for 72 hours, and must set their own password at first sign-in. If it expires, an administrator issues a new one with Reset Password.
 - Only Administrators can invite, promote, demote, reset or suspend Administrators.
-- Administrators can "View As" another user; starting and ending it is recorded in the audit log.
+- Administrators can "View As" another user; starting and ending it is recorded in the audit log. View As is strictly read-only: writes are refused (HTTP middleware plus a database guard), and the UI shows a "read-only" toast instead of saving.
 - Branded 403, 404 and 500 pages. 500 pages never show exception details.
 
 ### Dashboard
@@ -211,6 +211,7 @@ The Business Calendar (`/calendar`) is the single place to manage the forecast's
 - **Settings** (`/settings`): organisation details, thresholds and defaults such as `requests.default_due_days`, plus the audit trail.
 - **In-app notifications:** stock, leakage, overdue invoices, large payments, errors and requests. Users can switch off some alert types in their profile.
 - **Audit log:** records settings changes, user and role actions, invoices, payments and requests.
+- **Email:** `MailService` sends branded emails through the configured mailer (`MAIL_MAILER`). Check delivery with `php artisan app:send-test-email you@example.com`.
 
 ## Getting started
 
@@ -305,7 +306,7 @@ php artisan config:cache && php artisan route:cache && php artisan view:cache
 ```
 
 - **Environment:** start from `.env.example` and apply its "Production" block: `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://…`, `SESSION_SECURE_COOKIE=true`, and `TRUSTED_PROXIES=*` when the host terminates TLS in front of the app.
-- **Mail:** set a real `MAIL_MAILER`. Never leave `MAIL_MAILER=log` on a host: invitation emails contain a temporary password and would be written to the log file.
+- **Mail:** set a real `MAIL_MAILER`. Never leave `MAIL_MAILER=log` on a host: invitation emails contain a temporary password and would be written to the log file. After setting it, run `php artisan app:send-test-email you@your-domain` to confirm mail actually arrives.
 - **Scheduler:** run `php artisan schedule:run` every minute from cron. Without it there is no day close, so forecasts never become ready, and no preventive work orders or overdue reminders.
 - **Test and demo data:** `TestUserSeeder` and the `demo:*` commands refuse to run outside `local` and `testing`.
 - **Prediction service:** install with `uv sync --frozen`, run one uvicorn worker bound to localhost or a private network, and set `ML_API_TOKEN` on the service to the same value as Laravel's `ML_FORECAST_TOKEN`. Never expose port 8001 or the Streamlit dashboard publicly; leave `ML_DASHBOARD_URL` unset in production. See [`ml/README.md`](ml/README.md).

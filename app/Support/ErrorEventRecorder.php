@@ -13,6 +13,11 @@ class ErrorEventRecorder
 {
     public function record(Request $request, Throwable $exception, int $statusCode): string
     {
+        return Impersonation::allowingWrites(fn (): string => $this->persist($request, $exception, $statusCode));
+    }
+
+    private function persist(Request $request, Throwable $exception, int $statusCode): string
+    {
         do {
             $reference = Str::upper(bin2hex(random_bytes(4)));
             $formattedReference = substr($reference, 0, 4).'-'.substr($reference, 4);
