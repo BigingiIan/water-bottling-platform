@@ -2,6 +2,7 @@
 
 namespace App\Services\Forecasting;
 
+use App\Services\MLForecastClient;
 use App\Support\Plural;
 use App\Support\SettingsDate;
 
@@ -55,6 +56,7 @@ final readonly class ForecastOutcome
                     .' before '.$targetDate.': '.$this->formattedMissingDates().'. Confirm sales coverage for these days.',
             ForecastStatus::MissingContext => 'No promotion, holiday, school-term and temperature context for '.$targetDate.'.',
             ForecastStatus::ServiceUnreachable => 'The ML service is unreachable'.($this->detail ? " at {$this->detail}" : '').'.',
+            ForecastStatus::Unauthorized => MLForecastClient::UNAUTHORIZED_MESSAGE,
             ForecastStatus::NoModelForSku => "The ML service has no trained model for {$this->sku}.",
             ForecastStatus::ServiceError => 'The ML service could not score this request'.($this->detail ? " ({$this->detail})" : '').'.',
             ForecastStatus::InvalidResponse => 'The ML service returned an invalid prediction or missing model metadata.',

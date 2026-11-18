@@ -68,24 +68,24 @@ enum RequestStatus: string
     public function badgeClasses(): string
     {
         return match ($this) {
-            self::Open => 'bg-blue-50 text-[#1d4ed8]',
-            self::Acknowledged => 'bg-purple-100 text-[#7e22ce]',
-            self::InProgress => 'bg-amber-50 text-[#b45309]',
-            self::Done => 'bg-green-50 text-[#15803d]',
-            self::Declined => 'bg-red-50 text-[#b91c1c]',
-            self::Cancelled => 'bg-gray-100 text-gray-600',
+            self::Open => 'bg-accent-soft text-accent-ink',
+            self::Acknowledged => 'bg-highlight-soft text-highlight-ink',
+            self::InProgress => 'bg-warning-soft text-warning-ink',
+            self::Done => 'bg-success-soft text-success-ink',
+            self::Declined => 'bg-danger-soft text-danger-ink',
+            self::Cancelled => 'bg-surface-strong text-fg-soft',
         };
     }
 
     public function dotClasses(): string
     {
         return match ($this) {
-            self::Open => 'bg-blue-500',
-            self::Acknowledged => 'bg-purple-500',
-            self::InProgress => 'bg-amber-500',
-            self::Done => 'bg-green-500',
-            self::Declined => 'bg-red-500',
-            self::Cancelled => 'bg-gray-400',
+            self::Open => 'bg-accent',
+            self::Acknowledged => 'bg-highlight',
+            self::InProgress => 'bg-warning',
+            self::Done => 'bg-success',
+            self::Declined => 'bg-danger',
+            self::Cancelled => 'bg-subtle',
         };
     }
 }

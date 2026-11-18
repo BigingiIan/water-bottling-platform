@@ -8,17 +8,17 @@
     $helpUrl = $reduced ? null : $footerDetails->helpUrl();
 @endphp
 
-<footer {{ $attributes->class(['border-t border-gray-200 px-6 py-3 text-xs text-gray-500 sm:px-7 print:hidden']) }}>
+<footer {{ $attributes->class(['border-t border-border px-6 py-3 text-xs text-muted sm:px-7 print:hidden']) }}>
     <div class="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <p class="truncate">
-            <span class="font-semibold text-gray-700">{{ $footerDetails->organisationName() }}</span>
-            <span aria-hidden="true" class="mx-1 text-gray-300">·</span>
+            <span class="font-semibold text-fg-soft">{{ $footerDetails->organisationName() }}</span>
+            <span aria-hidden="true" class="mx-1 text-subtle">·</span>
             <span>&copy; {{ $footerDetails->year() }}</span>
         </p>
         <div class="flex items-center gap-3 whitespace-nowrap">
             <span>AquaOps <span class="tabular-nums">v{{ $footerDetails->version() }}</span></span>
             @if ($helpUrl)
-                <a href="{{ $helpUrl }}" data-tour="help-link" class="font-semibold text-blue-700 hover:text-blue-900 hover:underline">{{ __('help.centre.title') }}</a>
+                <a href="{{ $helpUrl }}" data-tour="help-link" class="font-semibold text-accent-ink hover:text-accent-ink hover:underline">{{ __('help.centre.title') }}</a>
             @endif
             @if (! $reduced && $showForecastStatus)
                 <livewire:forecast-service-status />

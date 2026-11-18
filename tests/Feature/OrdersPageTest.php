@@ -117,6 +117,21 @@ class OrdersPageTest extends TestCase
         $this->assertSame(OrderStatus::Draft, Order::query()->sole()->status);
     }
 
+    public function test_saving_an_order_confirmed_elsewhere_shows_a_message_instead_of_failing(): void
+    {
+        $administrator = $this->userWithRole('administrator');
+        $order = $this->draftFor($administrator, stock: 50);
+        $this->actingAs($administrator);
+        $editor = Livewire::test(OrderEditor::class, ['order' => $order]);
+        app(OrderService::class)->confirm($order, $administrator);
+
+        $editor->call('saveDraft')
+            ->assertHasErrors('confirm')
+            ->assertSee('This order was changed elsewhere; reload to see the latest.')
+            ->assertNoRedirect();
+        $editor->call('confirmOrder')->assertHasErrors('confirm')->assertNoRedirect();
+    }
+
     public function test_confirmed_orders_cannot_be_edited(): void
     {
         $administrator = $this->userWithRole('administrator');

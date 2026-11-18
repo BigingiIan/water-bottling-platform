@@ -4,8 +4,10 @@ namespace App\Livewire;
 
 use App\Models\AuditLog;
 use App\Models\User;
+use App\Services\AppearanceService;
 use App\Services\SettingsService;
 use App\Services\UserPreferenceService;
+use App\Support\Appearance\Palette;
 use App\Support\ModuleAccess;
 use App\Support\Plural;
 use App\Support\UserAgentParser;
@@ -55,6 +57,18 @@ class ProfilePage extends Component
     public string $landingPage = 'dashboard';
 
     public string $pageSize = '';
+
+    public bool $reduceMotion = false;
+
+    /**
+     * The user's own theme mode; empty means the organisation default.
+     */
+    public string $theme = '';
+
+    /**
+     * The user's own colour profile; empty means the organisation default.
+     */
+    public string $profile = '';
 
     public function mount(UserPreferenceService $preferences): void
     {
@@ -231,10 +245,14 @@ class ProfilePage extends Component
             'notifications' => $this->notificationPreferences,
             'landing_page' => $this->landingPage,
             'page_size' => $this->pageSize,
+            'reduce_motion' => $this->reduceMotion,
+            'theme' => $this->theme,
+            'profile' => $this->profile,
         ]);
 
         $this->resetValidation();
         $this->fillPreferences($preferences);
+        $this->dispatchAppearance($user);
         $this->dispatch('profile-saved', message: 'Preferences saved.');
     }
 
@@ -253,6 +271,9 @@ class ProfilePage extends Component
             'notificationOptions' => $preferences->notificationPreferencesFor($user),
             'landingPageOptions' => $preferences->landingPagesFor($user),
             'pageSizeOptions' => UserPreferenceService::PAGE_SIZES,
+            'themeOptions' => app(Palette::class)->themes(),
+            'profileOptions' => app(Palette::class)->profiles(),
+            'organisationAppearance' => app(AppearanceService::class)->organisationDefault(),
             'preferences' => $preferences,
         ]);
     }
@@ -361,6 +382,24 @@ class ProfilePage extends Component
         $landingPage = $preferences->landingPage($user);
         $this->landingPage = array_key_exists($landingPage, $preferences->landingPagesFor($user)) ? $landingPage : 'dashboard';
         $this->pageSize = (string) ($preferences->storedPageSize($user) ?? '');
+        $this->reduceMotion = $preferences->reduceMotion($user);
+        $this->theme = (string) $preferences->themePreference($user);
+        $this->profile = (string) $preferences->profilePreference($user);
+    }
+
+    /**
+     * Repaints the open page in the saved theme, the same tokens the next page load renders on the server.
+     */
+    private function dispatchAppearance(User $user): void
+    {
+        $appearance = app(AppearanceService::class)->resolve($user);
+
+        $this->dispatch(
+            'appearance-changed',
+            theme: $appearance['theme'],
+            profile: $appearance['profile'],
+            stylesheet: app(Palette::class)->rootStylesheet($appearance['profile'], $appearance['theme']),
+        );
     }
 
     private function resetPasswordFields(): void

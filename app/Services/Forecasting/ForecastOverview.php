@@ -174,8 +174,7 @@ class ForecastOverview
             ->where('horizon_days', 1)
             ->whereDate('forecast_date', '>=', $from->toDateString())
             ->whereDate('forecast_date', '<=', $to->toDateString())
-            ->orderByDesc('generated_at')
-            ->orderByDesc('id')
+            ->latestGenerated()
             ->get()
             ->groupBy('product_id')
             ->map(fn (Collection $records): Collection => $records

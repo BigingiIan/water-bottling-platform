@@ -88,27 +88,35 @@ class ProductionRuns extends Component
         abort_unless($user instanceof User, 403);
         app(ModuleAccess::class)->authorize($user, 'production', write: true);
 
-        $run = ProductionSchedule::query()->with('productionLine')->findOrFail($scheduleId);
+        $lineId = ProductionSchedule::query()->findOrFail($scheduleId)->production_line_id;
 
-        if ($run->status !== 'queued') {
-            $this->addError('runTransition', 'Only queued runs can be started.');
+        // Starts on the same line queue behind its row lock, so two users cannot both pass the check below.
+        $error = DB::transaction(function () use ($scheduleId, $lineId): ?string {
+            $line = ProductionLine::query()->lockForUpdate()->find($lineId);
+            $run = ProductionSchedule::query()->lockForUpdate()->findOrFail($scheduleId);
 
-            return;
+            if ($run->status !== 'queued') {
+                return 'Only queued runs can be started.';
+            }
+
+            $lineHasActiveRun = ProductionSchedule::query()
+                ->where('production_line_id', $run->production_line_id)
+                ->where('status', 'active')
+                ->where('id', '!=', $run->id)
+                ->exists();
+
+            if ($lineHasActiveRun) {
+                return ($line?->name ?? 'This line').' already has an active run. Complete it before starting another.';
+            }
+
+            $run->update(['status' => 'active']);
+
+            return null;
+        });
+
+        if ($error !== null) {
+            $this->addError('runTransition', $error);
         }
-
-        $lineHasActiveRun = ProductionSchedule::query()
-            ->where('production_line_id', $run->production_line_id)
-            ->where('status', 'active')
-            ->where('id', '!=', $run->id)
-            ->exists();
-
-        if ($lineHasActiveRun) {
-            $this->addError('runTransition', ($run->productionLine?->name ?? 'This line').' already has an active run. Complete it before starting another.');
-
-            return;
-        }
-
-        $run->update(['status' => 'active']);
     }
 
     public function completeRun(int $scheduleId): void
@@ -197,8 +205,8 @@ class ProductionRuns extends Component
             'runs' => $runs,
             'lines' => ProductionLine::query()->orderBy('name')->get(),
             'statusPresentation' => [
-                'active' => ['label' => 'Active', 'class' => 'bg-blue-50 text-[#1d4ed8]', 'dotClass' => 'bg-blue-500', 'barClass' => 'bg-blue-500'],
-                'queued' => ['label' => 'Queued', 'class' => 'bg-gray-100 text-gray-600', 'dotClass' => 'bg-gray-400', 'barClass' => 'bg-blue-500'],
+                'active' => ['label' => 'Active', 'class' => 'bg-accent-soft text-accent-ink', 'dotClass' => 'bg-accent', 'barClass' => 'bg-accent'],
+                'queued' => ['label' => 'Queued', 'class' => 'bg-surface-strong text-fg-soft', 'dotClass' => 'bg-subtle', 'barClass' => 'bg-accent'],
             ],
             'totalTarget' => $runs->sum('target_units'),
             'totalActual' => $runs->sum('logs_sum_units_logged'),

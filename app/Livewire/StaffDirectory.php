@@ -7,6 +7,7 @@ use App\Models\Module;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\UserPreferenceService;
+use App\Support\CsvCell;
 use App\Support\ModuleAccess;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
@@ -112,10 +113,10 @@ class StaffDirectory extends Component
 
         return response()->streamDownload(function () use ($members): void {
             $output = fopen('php://output', 'w');
-            fputcsv($output, ['name', 'email', 'role', 'status', 'modules', 'last_active_at']);
+            fputcsv($output, CsvCell::escapeRow(['name', 'email', 'role', 'status', 'modules', 'last_active_at']));
 
             foreach ($members as $member) {
-                fputcsv($output, [
+                fputcsv($output, CsvCell::escapeRow([
                     $member->name,
                     $member->email,
                     $member->role?->name,
@@ -125,7 +126,7 @@ class StaffDirectory extends Component
                         ->map(fn (Module $module): string => "{$module->name} ({$module->pivot->access_level})")
                         ->implode('; '),
                     $member->last_active_at?->toIso8601String(),
-                ]);
+                ]));
             }
 
             fclose($output);
@@ -153,16 +154,16 @@ class StaffDirectory extends Component
             'modules' => Module::query()->orderBy('name')->get(),
             'canInvite' => app(ModuleAccess::class)->can($user, 'users-roles', write: true),
             'rolePresentation' => [
-                'administrator' => ['class' => 'bg-red-50 text-[#b91c1c]', 'avatarColor' => '#2563eb'],
-                'production-manager' => ['class' => 'bg-blue-50 text-[#1d4ed8]', 'avatarColor' => '#0f766e'],
-                'production-staff' => ['class' => 'bg-teal-50 text-[#0f766e]', 'avatarColor' => '#0f766e'],
-                'inventory-staff' => ['class' => 'bg-amber-100 text-[#92400e]', 'avatarColor' => '#b45309'],
-                'maintenance-staff' => ['class' => 'bg-purple-100 text-[#7e22ce]', 'avatarColor' => '#7e22ce'],
+                'administrator' => ['class' => 'bg-danger-soft text-danger-ink', 'avatarClass' => 'bg-accent text-on-accent'],
+                'production-manager' => ['class' => 'bg-accent-soft text-accent-ink', 'avatarClass' => 'bg-info text-on-info'],
+                'production-staff' => ['class' => 'bg-tag-soft text-tag-ink', 'avatarClass' => 'bg-tag text-on-tag'],
+                'inventory-staff' => ['class' => 'bg-warning-soft text-warning-ink', 'avatarClass' => 'bg-warning text-on-warning'],
+                'maintenance-staff' => ['class' => 'bg-highlight-soft text-highlight-ink', 'avatarClass' => 'bg-highlight text-on-highlight'],
             ],
             'statusPresentation' => [
-                'active' => ['label' => 'Active', 'class' => 'bg-green-50 text-[#15803d]', 'dotClass' => 'bg-green-500'],
-                'pending' => ['label' => 'Pending Invite', 'class' => 'bg-amber-50 text-[#b45309]', 'dotClass' => 'bg-amber-500'],
-                'suspended' => ['label' => 'Suspended', 'class' => 'bg-red-50 text-[#b91c1c]', 'dotClass' => 'bg-red-500'],
+                'active' => ['label' => 'Active', 'class' => 'bg-success-soft text-success-ink', 'dotClass' => 'bg-success'],
+                'pending' => ['label' => 'Pending Invite', 'class' => 'bg-warning-soft text-warning-ink', 'dotClass' => 'bg-warning'],
+                'suspended' => ['label' => 'Suspended', 'class' => 'bg-danger-soft text-danger-ink', 'dotClass' => 'bg-danger'],
             ],
         ]);
     }

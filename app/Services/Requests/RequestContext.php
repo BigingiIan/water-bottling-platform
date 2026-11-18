@@ -3,6 +3,7 @@
 namespace App\Services\Requests;
 
 use App\Models\DepartmentRequest;
+use App\Models\Equipment;
 use App\Models\LeakageReport;
 use App\Models\Order;
 use App\Models\Product;
@@ -35,6 +36,7 @@ class RequestContext
         'leakage_report' => ['label' => 'Leakage report', 'module' => 'inventory', 'model' => LeakageReport::class, 'type' => RequestType::LeakageReview],
         'product' => ['label' => 'Product', 'module' => 'inventory', 'model' => Product::class, 'type' => RequestType::StockCheck],
         'stock_line' => ['label' => 'Stock line', 'module' => 'inventory', 'model' => WarehouseStock::class, 'type' => RequestType::StockCheck],
+        'equipment' => ['label' => 'Equipment', 'module' => 'maintenance', 'model' => Equipment::class, 'type' => RequestType::General],
     ];
 
     public function __construct(
@@ -77,6 +79,7 @@ class RequestContext
             'leakage_report' => $this->leakageReportFields($record),
             'product' => $this->productFields($record),
             'stock_line' => $this->stockLineFields($record),
+            'equipment' => $this->equipmentFields($record),
         };
 
         return [
@@ -117,6 +120,7 @@ class RequestContext
             'leakage_report' => route('inventory.overview', ['tab' => 'leakage']),
             'product' => route('inventory.overview', ['productFilter' => $record->getKey()]),
             'stock_line' => route('inventory.overview', ['productFilter' => $record->product_id]),
+            'equipment' => route('maintenance.equipment.show', $record),
         };
     }
 
@@ -188,6 +192,21 @@ class RequestContext
             'Name' => $product->name,
             'Units on hand' => number_format((float) $product->warehouseStock()->sum('current_level')),
             'Reorder threshold' => number_format((float) $product->reorder_threshold),
+        ]];
+    }
+
+    /**
+     * @return array{0: string, 1: array<string, string>}
+     */
+    private function equipmentFields(Equipment $equipment): array
+    {
+        $equipment->loadMissing('productionLine:id,name');
+
+        return ["Equipment {$equipment->code} · {$equipment->name}", [
+            'Type' => __('maintenance.equipment_types.'.$equipment->type),
+            'Line' => $equipment->productionLine?->name ?? 'Not on a line',
+            'Location' => $equipment->location ?: 'Not recorded',
+            'Status' => $equipment->statusLabel(),
         ]];
     }
 

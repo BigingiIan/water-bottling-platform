@@ -61,6 +61,7 @@ class User extends Authenticatable
         'role_id',
         'status',
         'must_change_password',
+        'temporary_password_expires_at',
         'last_active_at',
     ];
 
@@ -72,6 +73,7 @@ class User extends Authenticatable
     {
         return [
             'must_change_password' => 'boolean',
+            'temporary_password_expires_at' => 'datetime',
             'last_active_at' => 'datetime',
         ];
     }

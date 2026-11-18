@@ -68,7 +68,7 @@ class RolePermissionMatrixTest extends TestCase
     public function test_staged_changes_are_not_persisted_until_saved_and_cover_all_three_levels(): void
     {
         $role = Role::query()->where('slug', 'production-manager')->firstOrFail();
-        $module = Module::query()->where('slug', 'equipment')->firstOrFail();
+        $module = Module::query()->where('slug', 'error-logs')->firstOrFail();
         $permission = DB::table('role_module_permissions')
             ->where('role_id', $role->id)
             ->where('module_id', $module->id);
@@ -104,7 +104,7 @@ class RolePermissionMatrixTest extends TestCase
     public function test_selecting_the_stored_level_again_clears_the_pending_change(): void
     {
         $role = Role::query()->where('slug', 'production-manager')->firstOrFail();
-        $module = Module::query()->where('slug', 'equipment')->firstOrFail();
+        $module = Module::query()->where('slug', 'error-logs')->firstOrFail();
 
         Livewire::test(RolePermissionMatrix::class)
             ->call('setPermission', $role->id, $module->id, 'full')
@@ -118,7 +118,7 @@ class RolePermissionMatrixTest extends TestCase
     {
         $productionManager = Role::query()->where('slug', 'production-manager')->firstOrFail();
         $inventoryStaff = Role::query()->where('slug', 'inventory-staff')->firstOrFail();
-        $equipment = Module::query()->where('slug', 'equipment')->firstOrFail();
+        $equipment = Module::query()->where('slug', 'error-logs')->firstOrFail();
         $forecasting = Module::query()->where('slug', 'forecasting')->firstOrFail();
         $inventoryForecastLevel = DB::table('role_module_permissions')
             ->where('role_id', $inventoryStaff->id)
@@ -133,7 +133,7 @@ class RolePermissionMatrixTest extends TestCase
             ->assertDontSee('Save permission changes?')
             ->call('openSaveConfirmation')
             ->assertSee('Save permission changes?')
-            ->assertSeeInOrder(['Changes to save', 'Production Manager', 'Equipment', 'None', 'View'])
+            ->assertSeeInOrder(['Changes to save', 'Production Manager', 'Error Logs', 'None', 'View'])
             ->assertSee('Inventory Staff')
             ->assertSee('Save 2 changes');
     }
@@ -141,7 +141,7 @@ class RolePermissionMatrixTest extends TestCase
     public function test_discarding_changes_leaves_permissions_untouched(): void
     {
         $role = Role::query()->where('slug', 'production-manager')->firstOrFail();
-        $module = Module::query()->where('slug', 'equipment')->firstOrFail();
+        $module = Module::query()->where('slug', 'error-logs')->firstOrFail();
 
         Livewire::test(RolePermissionMatrix::class)
             ->call('setPermission', $role->id, $module->id, 'full')
@@ -158,7 +158,7 @@ class RolePermissionMatrixTest extends TestCase
     public function test_staging_rejects_nonexistent_role_or_module_ids_and_unknown_levels(): void
     {
         $role = Role::query()->where('slug', 'production-manager')->firstOrFail();
-        $module = Module::query()->where('slug', 'equipment')->firstOrFail();
+        $module = Module::query()->where('slug', 'error-logs')->firstOrFail();
 
         Livewire::test(RolePermissionMatrix::class)
             ->call('setPermission', 999, 999, 'view')
@@ -168,13 +168,13 @@ class RolePermissionMatrixTest extends TestCase
             ->call('setPermission', $role->id, $module->id, 'owner')
             ->assertHasErrors(['access_level']);
 
-        $this->assertSame(60, DB::table('role_module_permissions')->count());
+        $this->assertSame(65, DB::table('role_module_permissions')->count());
     }
 
     public function test_tampered_pending_changes_are_validated_when_saving(): void
     {
         $role = Role::query()->where('slug', 'production-manager')->firstOrFail();
-        $module = Module::query()->where('slug', 'equipment')->firstOrFail();
+        $module = Module::query()->where('slug', 'error-logs')->firstOrFail();
 
         Livewire::test(RolePermissionMatrix::class)
             ->set('pendingPermissions', ["{$role->id}-{$module->id}" => 'owner'])
@@ -254,9 +254,11 @@ class RolePermissionMatrixTest extends TestCase
             Module::query()->count(),
             DB::table('role_module_permissions')->where('role_id', $role->id)->count(),
         );
-        // Every role may send requests; every other module starts closed.
+        // Every role may send requests and read the business calendar; every other module starts closed.
         $this->assertSame(
-            Module::query()->orderBy('id')->pluck('slug')->mapWithKeys(fn (string $slug): array => [$slug => $slug === 'requests' ? 'full' : 'none'])->all(),
+            Module::query()->orderBy('id')->pluck('slug')->mapWithKeys(fn (string $slug): array => [$slug => match ($slug) {
+                'requests' => 'full', 'calendar' => 'view', default => 'none'
+            }])->all(),
             DB::table('role_module_permissions')
                 ->join('modules', 'modules.id', '=', 'role_module_permissions.module_id')
                 ->where('role_id', $role->id)

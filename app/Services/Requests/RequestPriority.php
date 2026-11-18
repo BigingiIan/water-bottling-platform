@@ -16,9 +16,9 @@ enum RequestPriority: string
     public function badgeClasses(): string
     {
         return match ($this) {
-            self::Low => 'bg-gray-100 text-gray-600',
-            self::Normal => 'bg-blue-50 text-[#1d4ed8]',
-            self::Urgent => 'bg-red-50 text-[#b91c1c]',
+            self::Low => 'bg-surface-strong text-fg-soft',
+            self::Normal => 'bg-accent-soft text-accent-ink',
+            self::Urgent => 'bg-danger-soft text-danger-ink',
         };
     }
 

@@ -1,8 +1,8 @@
 @php
     $severityDotClasses = [
-        'info' => 'bg-blue-500',
-        'warning' => 'bg-amber-500',
-        'critical' => 'bg-red-500',
+        'info' => 'bg-accent',
+        'warning' => 'bg-warning',
+        'critical' => 'bg-danger',
     ];
 @endphp
 
@@ -24,11 +24,11 @@
         aria-expanded="{{ $open ? 'true' : 'false' }}"
         x-bind:aria-expanded="$wire.open ? 'true' : 'false'"
         x-on:click="$wire.$toggle('open')"
-        class="relative flex size-[34px] items-center justify-center rounded-md bg-gray-100 text-gray-600 transition-colors hover:bg-gray-200 hover:text-gray-800"
+        class="relative flex size-[34px] items-center justify-center rounded-md bg-surface-strong text-fg-soft transition-colors hover:bg-border hover:text-fg"
     >
         <x-heroicon-o-bell class="size-5" aria-hidden="true" />
         @if ($unreadCount > 0)
-            <span aria-hidden="true" class="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+            <span aria-hidden="true" class="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold leading-none text-on-danger">
                 {{ $unreadCount > 9 ? '9+' : $unreadCount }}
             </span>
         @endif
@@ -39,16 +39,16 @@
         aria-label="Notifications"
         x-show="$wire.open"
         @unless ($open) style="display: none" @endunless
-        class="absolute right-0 z-30 mt-2 w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
+        class="absolute right-0 z-30 mt-2 w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-border bg-surface shadow-lg"
     >
-        <div class="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-            <h2 class="text-[13px] font-bold text-gray-900">Notifications</h2>
+        <div class="flex items-center justify-between border-b border-border px-4 py-3">
+            <h2 class="text-[13px] font-bold text-fg">Notifications</h2>
             @if ($unreadCount > 0)
-                <button type="button" wire:click="markAllAsRead" class="text-xs font-semibold text-blue-700 hover:text-blue-900 hover:underline">Mark all as read</button>
+                <button type="button" wire:click="markAllAsRead" class="text-xs font-semibold text-accent-ink hover:text-accent-ink hover:underline">Mark all as read</button>
             @endif
         </div>
 
-        <ul class="max-h-[420px] divide-y divide-gray-100 overflow-y-auto">
+        <ul class="max-h-[420px] divide-y divide-border overflow-y-auto">
             @forelse ($notifications as $notification)
                 @php
                     $isUnread = $notification->read_at === null;
@@ -59,31 +59,31 @@
                         type="button"
                         wire:click="openNotification('{{ $notification->id }}')"
                         @class([
-                            'flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 focus:bg-gray-50 focus:outline-none',
-                            'bg-blue-50/60' => $isUnread,
+                            'flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-muted focus:bg-surface-muted focus:outline-none',
+                            'bg-accent-soft/60' => $isUnread,
                         ])
                     >
-                        <span aria-hidden="true" @class(['mt-1.5 size-2 shrink-0 rounded-full', $severityDotClasses[$severity] ?? 'bg-blue-500'])></span>
+                        <span aria-hidden="true" @class(['mt-1.5 size-2 shrink-0 rounded-full', $severityDotClasses[$severity] ?? 'bg-accent'])></span>
                         <span class="min-w-0 flex-1">
-                            <span @class(['block truncate text-[13px] text-gray-900', 'font-semibold' => $isUnread, 'font-medium' => ! $isUnread])>
+                            <span @class(['block truncate text-[13px] text-fg', 'font-semibold' => $isUnread, 'font-medium' => ! $isUnread])>
                                 @if ($isUnread)<span class="sr-only">Unread: </span>@endif
                                 <span class="sr-only">{{ ucfirst($severity) }}: </span>{{ $notification->data['title'] ?? 'Notification' }}
                             </span>
-                            <span class="mt-0.5 block truncate text-xs text-gray-500">{{ $notification->data['body'] ?? '' }}</span>
-                            <span class="mt-1 block text-[11px] text-gray-400">{{ $notification->created_at?->diffForHumans() }}</span>
+                            <span class="mt-0.5 block truncate text-xs text-muted">{{ $notification->data['body'] ?? '' }}</span>
+                            <span class="mt-1 block text-[11px] text-muted">{{ $notification->created_at?->diffForHumans() }}</span>
                         </span>
                         @if ($isUnread)
-                            <span aria-hidden="true" class="mt-1.5 size-1.5 shrink-0 rounded-full bg-blue-600"></span>
+                            <span aria-hidden="true" class="mt-1.5 size-1.5 shrink-0 rounded-full bg-accent"></span>
                         @endif
                     </button>
                 </li>
             @empty
-                <li class="px-4 py-8 text-center text-sm text-gray-500">You're all caught up.</li>
+                <li class="px-4 py-8 text-center text-sm text-muted">You're all caught up.</li>
             @endforelse
         </ul>
 
-        <div class="border-t border-gray-100 bg-gray-50 px-4 py-2.5 text-center">
-            <a href="{{ route('notifications.index') }}" class="text-xs font-semibold text-blue-700 hover:text-blue-900 hover:underline">View all</a>
+        <div class="border-t border-border bg-surface-muted px-4 py-2.5 text-center">
+            <a href="{{ route('notifications.index') }}" class="text-xs font-semibold text-accent-ink hover:text-accent-ink hover:underline">View all</a>
         </div>
     </section>
 </div>

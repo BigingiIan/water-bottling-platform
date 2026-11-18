@@ -4,9 +4,9 @@
 ])
 
 @php
-    // Two categorical series validated with the dataviz palette checks (light surface).
-    $actualColor = '#2a78d6';
-    $forecastColor = '#eb6834';
+    // The profile's first two chart series (contrast-checked against the surface in every profile and mode).
+    $actualSeries = ['stroke' => 'stroke-chart-1', 'fill' => 'fill-chart-1', 'swatch' => 'bg-chart-1'];
+    $forecastSeries = ['stroke' => 'stroke-chart-2', 'fill' => 'fill-chart-2', 'swatch' => 'bg-chart-2'];
     $width = 560;
     $height = 170;
     $paddingLeft = 40;
@@ -62,22 +62,22 @@
 @endphp
 
 <figure {{ $attributes->class(['min-w-0']) }} x-data="{ active: null }">
-    <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
+    <div class="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted">
         <div class="flex items-center gap-3" aria-hidden="true">
             <span class="inline-flex items-center gap-1.5">
-                <svg width="16" height="6" viewBox="0 0 16 6"><line x1="1" y1="3" x2="15" y2="3" stroke="{{ $actualColor }}" stroke-width="2" stroke-linecap="round" /></svg>
+                <svg width="16" height="6" viewBox="0 0 16 6"><line x1="1" y1="3" x2="15" y2="3" class="{{ $actualSeries['stroke'] }}" stroke-width="2" stroke-linecap="round" /></svg>
                 Actual sales
             </span>
             <span class="inline-flex items-center gap-1.5">
-                <svg width="16" height="6" viewBox="0 0 16 6"><line x1="1" y1="3" x2="15" y2="3" stroke="{{ $forecastColor }}" stroke-width="2" stroke-dasharray="4 3" stroke-linecap="round" /></svg>
+                <svg width="16" height="6" viewBox="0 0 16 6"><line x1="1" y1="3" x2="15" y2="3" class="{{ $forecastSeries['stroke'] }}" stroke-width="2" stroke-dasharray="4 3" stroke-linecap="round" /></svg>
                 Forecast
             </span>
         </div>
-        <p class="tabular-nums text-gray-600" aria-live="polite">
+        <p class="tabular-nums text-fg-soft" aria-live="polite">
             <template x-if="active === null"><span>Hover the chart for daily values</span></template>
             @foreach (array_values($points) as $index => $point)
                 <template x-if="active === {{ $index }}">
-                    <span><b class="font-semibold text-gray-800">{{ $point['label'] }}</b> · Actual {{ $formatValue($point['actual']) }} · Forecast {{ $formatValue($point['forecast']) }}</span>
+                    <span><b class="font-semibold text-fg">{{ $point['label'] }}</b> · Actual {{ $formatValue($point['actual']) }} · Forecast {{ $formatValue($point['forecast']) }}</span>
                 </template>
             @endforeach
         </p>
@@ -87,37 +87,37 @@
         <title id="{{ $chartId }}-title">{{ $summary }}</title>
 
         @foreach ($gridValues as $gridValue)
-            <line x1="{{ $paddingLeft }}" x2="{{ $width - $paddingRight }}" y1="{{ $y($gridValue) }}" y2="{{ $y($gridValue) }}" stroke="#e2e8f0" stroke-width="1" />
-            <text x="{{ $paddingLeft - 6 }}" y="{{ $y($gridValue) + 3 }}" text-anchor="end" font-size="11" fill="#64748b">{{ number_format($gridValue) }}</text>
+            <line x1="{{ $paddingLeft }}" x2="{{ $width - $paddingRight }}" y1="{{ $y($gridValue) }}" y2="{{ $y($gridValue) }}" class="stroke-border" stroke-width="1" />
+            <text x="{{ $paddingLeft - 6 }}" y="{{ $y($gridValue) + 3 }}" text-anchor="end" font-size="11" class="fill-muted">{{ number_format($gridValue) }}</text>
         @endforeach
 
         @if (count($points) > 0)
-            <text x="{{ $x(0) }}" y="{{ $height - 6 }}" text-anchor="start" font-size="11" fill="#64748b">{{ $points[array_key_first($points)]['label'] }}</text>
-            <text x="{{ $x(count($points) - 1) }}" y="{{ $height - 6 }}" text-anchor="end" font-size="11" fill="#64748b">{{ $points[array_key_last($points)]['label'] }}</text>
+            <text x="{{ $x(0) }}" y="{{ $height - 6 }}" text-anchor="start" font-size="11" class="fill-muted">{{ $points[array_key_first($points)]['label'] }}</text>
+            <text x="{{ $x(count($points) - 1) }}" y="{{ $height - 6 }}" text-anchor="end" font-size="11" class="fill-muted">{{ $points[array_key_last($points)]['label'] }}</text>
         @endif
 
         @foreach (array_values($points) as $index => $point)
-            <line x-show="active === {{ $index }}" style="display: none" x1="{{ $x($index) }}" x2="{{ $x($index) }}" y1="{{ $paddingTop }}" y2="{{ $paddingTop + $plotHeight }}" stroke="#94a3b8" stroke-width="1" />
+            <line x-show="active === {{ $index }}" style="display: none" x1="{{ $x($index) }}" x2="{{ $x($index) }}" y1="{{ $paddingTop }}" y2="{{ $paddingTop + $plotHeight }}" class="stroke-subtle" stroke-width="1" />
         @endforeach
 
         @foreach ($actualSegments as $segment)
-            <polyline points="{{ implode(' ', $segment) }}" fill="none" stroke="{{ $actualColor }}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+            <polyline points="{{ implode(' ', $segment) }}" fill="none" class="{{ $actualSeries['stroke'] }}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
         @endforeach
         @foreach ($forecastSegments as $segment)
-            <polyline points="{{ implode(' ', $segment) }}" fill="none" stroke="{{ $forecastColor }}" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round" stroke-linecap="round" />
+            <polyline points="{{ implode(' ', $segment) }}" fill="none" class="{{ $forecastSeries['stroke'] }}" stroke-width="2" stroke-dasharray="5 4" stroke-linejoin="round" stroke-linecap="round" />
         @endforeach
 
         @if ($lastActualIndex !== null)
-            <circle cx="{{ $x($lastActualIndex) }}" cy="{{ $y((float) $points[$lastActualIndex]['actual']) }}" r="4" fill="{{ $actualColor }}" stroke="#ffffff" stroke-width="2" />
+            <circle cx="{{ $x($lastActualIndex) }}" cy="{{ $y((float) $points[$lastActualIndex]['actual']) }}" r="4" stroke-width="2" class="{{ $actualSeries['fill'] }} stroke-surface" />
         @endif
         @if ($lastForecastIndex !== null)
-            <circle cx="{{ $x($lastForecastIndex) }}" cy="{{ $y((float) $points[$lastForecastIndex]['forecast']) }}" r="4" fill="{{ $forecastColor }}" stroke="#ffffff" stroke-width="2" />
+            <circle cx="{{ $x($lastForecastIndex) }}" cy="{{ $y((float) $points[$lastForecastIndex]['forecast']) }}" r="4" stroke-width="2" class="{{ $forecastSeries['fill'] }} stroke-surface" />
         @endif
 
         @foreach (array_values($points) as $index => $point)
-            @foreach (['actual' => $actualColor, 'forecast' => $forecastColor] as $series => $color)
+            @foreach (['actual' => $actualSeries, 'forecast' => $forecastSeries] as $series => $seriesClasses)
                 @if ($point[$series] !== null)
-                    <circle x-show="active === {{ $index }}" style="display: none" cx="{{ $x($index) }}" cy="{{ $y((float) $point[$series]) }}" r="4" fill="{{ $color }}" stroke="#ffffff" stroke-width="2" />
+                    <circle x-show="active === {{ $index }}" style="display: none" cx="{{ $x($index) }}" cy="{{ $y((float) $point[$series]) }}" r="4" class="{{ $seriesClasses['fill'] }} stroke-surface" stroke-width="2" />
                 @endif
             @endforeach
             <rect x="{{ max(0, $x($index) - $step / 2) }}" y="0" width="{{ max($step, 8) }}" height="{{ $height }}" fill="transparent" x-on:mouseenter="active = {{ $index }}" />
@@ -125,18 +125,18 @@
     </svg>
 
     @if (! $hasForecast || $values->sum() == 0)
-        <p class="mt-1 text-[11px] text-gray-500">
+        <p class="mt-1 text-[11px] text-muted">
             {{ $values->sum() == 0 ? 'No sales were recorded in this window.' : '' }}
             {{ $hasForecast ? '' : 'No stored forecasts in this window yet.' }}
         </p>
     @endif
 
-    <details class="mt-1.5 text-xs text-gray-600">
-        <summary class="cursor-pointer select-none font-semibold text-blue-700 hover:text-blue-900">Show data table</summary>
+    <details class="mt-1.5 text-xs text-fg-soft">
+        <summary class="cursor-pointer select-none font-semibold text-accent-ink hover:text-accent-ink">Show data table</summary>
         <table class="mt-2 w-full border-collapse text-left tabular-nums">
             <caption class="sr-only">{{ $summary }}</caption>
             <thead>
-                <tr class="text-[10.5px] uppercase tracking-wide text-gray-500">
+                <tr class="text-[10.5px] uppercase tracking-wide text-muted">
                     <th scope="col" class="py-1 pr-2 font-semibold">Date</th>
                     <th scope="col" class="py-1 pr-2 text-right font-semibold">Actual</th>
                     <th scope="col" class="py-1 text-right font-semibold">Forecast</th>
@@ -144,7 +144,7 @@
             </thead>
             <tbody>
                 @foreach ($points as $point)
-                    <tr class="border-t border-gray-100">
+                    <tr class="border-t border-border">
                         <td class="py-1 pr-2">{{ $point['label'] }}</td>
                         <td class="py-1 pr-2 text-right">{{ $formatValue($point['actual']) }}</td>
                         <td class="py-1 text-right">{{ $formatValue($point['forecast']) }}</td>

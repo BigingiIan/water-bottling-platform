@@ -6,7 +6,8 @@ use App\Models\Customer;
 use App\Models\Product;
 use App\Models\ProductionBatch;
 use App\Models\User;
-use App\Services\Forecasting\DailyContext;
+use App\Services\Calendar\ContextCalendar;
+use App\Services\Calendar\TemperatureSource;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
@@ -66,7 +67,10 @@ class ForecastingDemoSeeder extends Seeder
      */
     private const REQUIRED_COLUMNS = ['date', 'product_sku', 'units_sold', 'unit_price_kes', 'is_promotion', 'is_public_holiday', 'is_school_term'];
 
-    public function __construct(private readonly DailyContext $context) {}
+    public function __construct(
+        private readonly ContextCalendar $calendar,
+        private readonly TemperatureSource $temperature,
+    ) {}
 
     public function run(): void
     {
@@ -74,7 +78,7 @@ class ForecastingDemoSeeder extends Seeder
 
         $replay = $this->loadReplay();
         $skus = array_keys($replay['rows']);
-        $this->context->assertClimatologyFor($skus);
+        $this->assertTemperatureFor($skus);
         $tomorrow = CarbonImmutable::today()->addDay();
 
         DB::transaction(function () use ($replay, $skus, $tomorrow): void {
@@ -96,7 +100,8 @@ class ForecastingDemoSeeder extends Seeder
                         'is_promotion' => $day['is_promotion'],
                         'is_public_holiday' => $day['is_public_holiday'],
                         'is_school_term' => $day['is_school_term'],
-                        'temperature_c' => $this->context->temperature($sku, $day['date']),
+                        'temperature_c' => $this->temperature->temperatureFor($sku, CarbonImmutable::parse($day['date'])),
+                        'temperature_source' => $this->temperature->name(),
                         'sales_data_covered' => false,
                         'created_at' => $timestamp,
                         'updated_at' => $timestamp,
@@ -120,7 +125,7 @@ class ForecastingDemoSeeder extends Seeder
             DB::table('daily_sku_features')->upsert(
                 $featureRows,
                 ['product_sku', 'date'],
-                ['is_promotion', 'is_public_holiday', 'is_school_term', 'temperature_c', 'sales_data_covered', 'updated_at'],
+                ['is_promotion', 'is_public_holiday', 'is_school_term', 'temperature_c', 'temperature_source', 'sales_data_covered', 'updated_at'],
             );
 
             // Replayed sales are history: warehouse_stock.current_level is deliberately not reduced,
@@ -280,30 +285,39 @@ class ForecastingDemoSeeder extends Seeder
     }
 
     /**
-     * Tomorrow is past the end of the CSV. Holiday and school-term come from the Kenyan calendar service;
-     * no promotion source exists, so an existing value is kept and otherwise "no promotion planned" (false)
-     * is assumed. Edit the row if a promotion is scheduled.
+     * Tomorrow is past the end of the CSV, so its holiday, school-term and promotion flags come from the
+     * Business Calendar, like any real day.
      *
      * @return array<string, mixed>
      */
     private function tomorrowContext(string $sku, CarbonImmutable $tomorrow, Carbon $timestamp): array
     {
-        $existingPromotion = DB::table('daily_sku_features')
-            ->where('product_sku', $sku)
-            ->whereDate('date', $tomorrow->toDateString())
-            ->value('is_promotion');
+        $productId = (int) Product::query()->where('unit_type', $sku)->orderBy('id')->value('id');
 
         return [
             'product_sku' => $sku,
             'date' => $tomorrow->toDateString(),
-            'is_promotion' => $existingPromotion === null ? false : (bool) $existingPromotion,
-            'is_public_holiday' => $this->context->isPublicHoliday($tomorrow->toDateString()),
-            'is_school_term' => $this->context->isSchoolTerm($tomorrow->toDateString()),
-            'temperature_c' => $this->context->temperature($sku, $tomorrow->toDateString()),
+            ...$this->calendar->flagsFor($productId, $tomorrow),
+            'temperature_c' => $this->temperature->temperatureFor($sku, $tomorrow),
+            'temperature_source' => $this->temperature->name(),
             'sales_data_covered' => false,
             'created_at' => $timestamp,
             'updated_at' => $timestamp,
         ];
+    }
+
+    /**
+     * Fails before any write when a SKU has no monthly mean temperatures.
+     *
+     * @param  array<int, string>  $skus
+     */
+    private function assertTemperatureFor(array $skus): void
+    {
+        foreach ($skus as $sku) {
+            if ($this->temperature->temperatureFor($sku, CarbonImmutable::today()) === null) {
+                throw new RuntimeException((string) $this->temperature->unavailableReason($sku));
+            }
+        }
     }
 
     /**

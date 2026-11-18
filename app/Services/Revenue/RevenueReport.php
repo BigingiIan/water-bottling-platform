@@ -282,8 +282,7 @@ class RevenueReport
             ->whereIn('product_id', $products->modelKeys())
             ->whereDate('forecast_date', '>=', $first->toDateString())
             ->whereDate('forecast_date', '<=', $last->toDateString())
-            ->orderByDesc('generated_at')
-            ->orderByDesc('id')
+            ->latestGenerated()
             ->get(['id', 'product_id', 'forecast_date', 'predicted_demand', 'generated_at'])
             ->unique(fn (ForecastRecord $record): string => $record->product_id.'|'.$record->forecast_date->toDateString())
             ->keyBy(fn (ForecastRecord $record): string => $record->product_id.'|'.$record->forecast_date->toDateString());

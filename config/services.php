@@ -37,6 +37,7 @@ return [
 
     'ml_forecast' => [
         'url' => env('ML_FORECAST_URL', 'http://127.0.0.1:8001'),
+        'token' => env('ML_FORECAST_TOKEN'),
         'timeout' => env('ML_FORECAST_TIMEOUT', 3),
         'dashboard_url' => env('ML_DASHBOARD_URL'),
         'model_dir' => env('ML_MODEL_DIR', base_path('ml/outputs/saved_models')),

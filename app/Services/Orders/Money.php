@@ -2,12 +2,19 @@
 
 namespace App\Services\Orders;
 
+use App\Services\SettingsService;
+use Throwable;
+
 /**
- * Exact KES arithmetic on decimal strings (bcmath, two decimal places). Money never passes through floats.
+ * Exact arithmetic on decimal strings (bcmath, two decimal places). Money never passes through floats.
+ *
+ * Amounts are stored without a currency; only format() shows one, taken from the organisation.currency setting.
  */
 final class Money
 {
     private const SCALE = 2;
+
+    private const DEFAULT_CURRENCY = 'KES';
 
     public static function normalize(string $amount): string
     {
@@ -46,6 +53,20 @@ final class Money
         $negative = str_starts_with($whole, '-');
         $digits = ltrim($whole, '-');
 
-        return ($negative ? '-' : '').'KES '.strrev(implode(',', str_split(strrev($digits), 3))).'.'.$fraction;
+        return ($negative ? '-' : '').self::currency().' '.strrev(implode(',', str_split(strrev($digits), 3))).'.'.$fraction;
+    }
+
+    /**
+     * The organisation's currency code, or KES when settings cannot be read (no database, no application).
+     */
+    public static function currency(): string
+    {
+        try {
+            $currency = app(SettingsService::class)->get('organisation.currency', self::DEFAULT_CURRENCY);
+        } catch (Throwable) {
+            return self::DEFAULT_CURRENCY;
+        }
+
+        return is_string($currency) && preg_match('/^[A-Z]{3}$/', $currency) === 1 ? $currency : self::DEFAULT_CURRENCY;
     }
 }

@@ -58,13 +58,17 @@ return [
             'view' => 'See orders and customers.',
             'full' => 'Create, confirm, dispatch and deliver orders, and manage customers.',
         ],
-        'equipment' => [
-            'view' => 'See equipment and maintenance work once that area is available.',
-            'full' => 'Manage equipment and maintenance work once that area is available.',
+        'maintenance' => [
+            'view' => 'See equipment, its status and downtime, maintenance plans and work orders.',
+            'full' => 'Manage equipment and plans, report breakdowns, and start and complete work orders.',
         ],
         'forecasting' => [
             'view' => 'See tomorrow’s demand forecast and stock cover per product.',
             'full' => 'See forecasts and request a fresh forecast run.',
+        ],
+        'calendar' => [
+            'view' => 'See the public holidays, school terms and promotions the forecast uses.',
+            'full' => 'Add, edit and delete holidays, school terms and promotions.',
         ],
         'invoicing' => [
             'view' => 'See invoices, payments and what is overdue.',
@@ -106,6 +110,8 @@ return [
             'invoicing' => ['guide' => 'invoicing', 'text' => 'Invoices are raised from dispatched orders and record what each customer owes. Issued invoices are locked, so corrections are made by voiding and reissuing.'],
             'revenue' => ['guide' => 'revenue', 'text' => 'Revenue shows what was invoiced, what was collected and what is still owed. It is read only and built from invoices and payments.'],
             'forecasting' => ['guide' => 'forecasting', 'text' => 'Forecasting shows tomorrow’s expected demand per product from the forecast service. When a forecast is missing, the page explains why.'],
+            'maintenance' => ['guide' => 'maintenance', 'text' => 'Maintenance tracks every machine, its preventive plans and the work orders that keep it running. Downtime is recorded on each work order and added up per machine and line.'],
+            'calendar' => ['guide' => 'calendar', 'text' => 'The Business Calendar holds the public holidays, school terms and promotions that change demand. The forecast reads them for every product and day.'],
             'requests' => ['guide' => 'requests', 'text' => 'Requests let you ask another team to act without needing access to their area. Every request has an owner, a status and a thread for replies.'],
             'users-roles' => ['guide' => 'users-roles', 'text' => 'This is where staff accounts and their roles are managed. Each role has None, View or Full access to every module.'],
             'settings' => ['guide' => 'settings', 'text' => 'Settings hold organisation details, operating thresholds and defaults. Every change is recorded in the audit trail.'],

@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\Revenue\RevenuePeriod;
 use App\Services\Revenue\RevenueReport;
 use App\Services\SettingsService;
+use App\Support\CsvCell;
 use App\Support\ModuleAccess;
 use App\Support\SettingsDate;
 use Carbon\CarbonImmutable;
@@ -62,37 +63,37 @@ class RevenuePage extends Component
 
         return response()->streamDownload(function () use ($period, $kpis, $series, $products, $customers, $aging, $forecast): void {
             $output = fopen('php://output', 'w');
-            fputcsv($output, ['section', 'label', 'metric', 'value']);
-            fputcsv($output, ['period', $period->from->toDateString().' to '.$period->to->toDateString(), 'compared_with', $period->previousFrom->toDateString().' to '.$period->previousTo->toDateString()]);
+            fputcsv($output, CsvCell::escapeRow(['section', 'label', 'metric', 'value']));
+            fputcsv($output, CsvCell::escapeRow(['period', $period->from->toDateString().' to '.$period->to->toDateString(), 'compared_with', $period->previousFrom->toDateString().' to '.$period->previousTo->toDateString()]));
 
             foreach ($kpis as $name => $kpi) {
-                fputcsv($output, ['kpi', $name, 'current', $kpi['current']]);
-                fputcsv($output, ['kpi', $name, 'previous', $kpi['previous']]);
-                fputcsv($output, ['kpi', $name, 'change_pct', $kpi['change'] ?? '']);
+                fputcsv($output, CsvCell::escapeRow(['kpi', $name, 'current', $kpi['current']]));
+                fputcsv($output, CsvCell::escapeRow(['kpi', $name, 'previous', $kpi['previous']]));
+                fputcsv($output, CsvCell::escapeRow(['kpi', $name, 'change_pct', $kpi['change'] ?? '']));
             }
 
             foreach ($series as $bucket) {
-                fputcsv($output, ['series', $bucket['key'], 'invoiced_net', $bucket['invoicedNet']]);
-                fputcsv($output, ['series', $bucket['key'], 'invoiced_gross', $bucket['invoicedGross']]);
-                fputcsv($output, ['series', $bucket['key'], 'collected', $bucket['collected']]);
+                fputcsv($output, CsvCell::escapeRow(['series', $bucket['key'], 'invoiced_net', $bucket['invoicedNet']]));
+                fputcsv($output, CsvCell::escapeRow(['series', $bucket['key'], 'invoiced_gross', $bucket['invoicedGross']]));
+                fputcsv($output, CsvCell::escapeRow(['series', $bucket['key'], 'collected', $bucket['collected']]));
             }
 
             foreach ($products['rows'] as $row) {
                 $label = $row['sku'] === null ? $row['name'] : "{$row['name']} ({$row['sku']})";
-                fputcsv($output, ['product', $label, 'units', $row['units']]);
-                fputcsv($output, ['product', $label, 'net', $row['net']]);
-                fputcsv($output, ['product', $label, 'share_pct', $row['share']]);
+                fputcsv($output, CsvCell::escapeRow(['product', $label, 'units', $row['units']]));
+                fputcsv($output, CsvCell::escapeRow(['product', $label, 'net', $row['net']]));
+                fputcsv($output, CsvCell::escapeRow(['product', $label, 'share_pct', $row['share']]));
             }
 
             foreach ($customers as $row) {
-                fputcsv($output, ['customer', $row['name'], 'invoiced_net', $row['net']]);
-                fputcsv($output, ['customer', $row['name'], 'invoiced_gross', $row['gross']]);
-                fputcsv($output, ['customer', $row['name'], 'outstanding', $row['outstanding']]);
+                fputcsv($output, CsvCell::escapeRow(['customer', $row['name'], 'invoiced_net', $row['net']]));
+                fputcsv($output, CsvCell::escapeRow(['customer', $row['name'], 'invoiced_gross', $row['gross']]));
+                fputcsv($output, CsvCell::escapeRow(['customer', $row['name'], 'outstanding', $row['outstanding']]));
             }
 
             foreach ([...$aging['rows'], ['name' => 'Total', ...$aging['totals']]] as $row) {
                 foreach ([...array_keys(RevenueReport::AGING_BUCKETS), 'total'] as $bucket) {
-                    fputcsv($output, ['aging', $row['name'], $bucket, $row[$bucket]]);
+                    fputcsv($output, CsvCell::escapeRow(['aging', $row['name'], $bucket, $row[$bucket]]));
                 }
             }
 
@@ -100,14 +101,14 @@ class RevenuePage extends Component
                 $label = "{$row['name']} ({$row['sku']})";
 
                 foreach ($row['daily'] as $date => $units) {
-                    fputcsv($output, ['forecast_estimate', $label, "units_{$date}", $units ?? 'no forecast']);
+                    fputcsv($output, CsvCell::escapeRow(['forecast_estimate', $label, "units_{$date}", $units ?? 'no forecast']));
                 }
 
-                fputcsv($output, ['forecast_estimate', $label, 'unit_price', $row['unitPrice']]);
-                fputcsv($output, ['forecast_estimate', $label, 'expected_revenue', $row['coveredDays'] === 0 ? 'no forecast' : $row['revenue']]);
+                fputcsv($output, CsvCell::escapeRow(['forecast_estimate', $label, 'unit_price', $row['unitPrice']]));
+                fputcsv($output, CsvCell::escapeRow(['forecast_estimate', $label, 'expected_revenue', $row['coveredDays'] === 0 ? 'no forecast' : $row['revenue']]));
             }
 
-            fputcsv($output, ['forecast_estimate', 'Total', 'expected_revenue', $forecast['totalRevenue']]);
+            fputcsv($output, CsvCell::escapeRow(['forecast_estimate', 'Total', 'expected_revenue', $forecast['totalRevenue']]));
             fclose($output);
         }, "revenue-{$from}_{$to}.csv", ['Content-Type' => 'text/csv']);
     }

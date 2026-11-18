@@ -3,40 +3,84 @@
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 
+/*
+ * Colours come only from design tokens. Tailwind's own palette is removed, so a raw class such as
+ * bg-gray-50 or text-blue-700 generates nothing. The token values (--c-*) are written into each page's
+ * <head> for the user's colour profile and theme mode (App\Support\Appearance\Palette, config/appearance.php).
+ */
 @theme {
-    --color-navy-950: #0b1220;
-    --color-navy-900: #0f1b2e;
-    --color-navy-800: #16263d;
-    --color-navy-700: #1e3350;
-    --color-navy-600: #2a456b;
-    --color-blue-600: #2563eb;
-    --color-blue-500: #3b82f6;
-    --color-blue-50: #eff6ff;
-    --color-teal-500: #14b8a6;
-    --color-teal-50: #f0fdfa;
-    --color-green-500: #16a34a;
-    --color-green-50: #f0fdf4;
-    --color-amber-500: #d97706;
-    --color-amber-50: #fffbeb;
-    --color-red-500: #dc2626;
-    --color-red-50: #fef2f2;
-    --color-gray-50: #f8fafc;
-    --color-gray-100: #f1f5f9;
-    --color-gray-200: #e2e8f0;
-    --color-gray-300: #cbd5e1;
-    --color-gray-400: #94a3b8;
-    --color-gray-500: #64748b;
-    --color-gray-600: #475569;
-    --color-gray-700: #334155;
-    --color-gray-800: #1e293b;
-    --color-gray-900: #0f172a;
+    --color-*: initial;
     --radius-md: 8px;
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+@theme inline {
+    --color-brand-from: var(--c-brand-from);
+    --color-brand-to: var(--c-brand-to);
+    --color-brand-ink: var(--c-brand-ink);
+    --color-on-brand: var(--c-on-brand);
+    --color-background: var(--c-background);
+    --color-surface: var(--c-surface);
+    --color-surface-muted: var(--c-surface-muted);
+    --color-surface-strong: var(--c-surface-strong);
+    --color-border: var(--c-border);
+    --color-border-strong: var(--c-border-strong);
+    --color-fg: var(--c-text);
+    --color-fg-soft: var(--c-text-soft);
+    --color-muted: var(--c-muted);
+    --color-subtle: var(--c-subtle);
+    --color-overlay: var(--c-overlay);
+    --color-tag: var(--c-tag);
+    --color-on-tag: var(--c-on-tag);
+    --color-tag-soft: var(--c-tag-soft);
+    --color-tag-ink: var(--c-tag-ink);
+    --color-highlight: var(--c-highlight);
+    --color-on-highlight: var(--c-on-highlight);
+    --color-highlight-soft: var(--c-highlight-soft);
+    --color-highlight-ink: var(--c-highlight-ink);
+    --color-success: var(--c-success);
+    --color-success-hover: var(--c-success-hover);
+    --color-on-success: var(--c-on-success);
+    --color-success-soft: var(--c-success-soft);
+    --color-success-ink: var(--c-success-ink);
+    --color-warning: var(--c-warning);
+    --color-warning-hover: var(--c-warning-hover);
+    --color-on-warning: var(--c-on-warning);
+    --color-warning-soft: var(--c-warning-soft);
+    --color-warning-ink: var(--c-warning-ink);
+    --color-danger: var(--c-danger);
+    --color-danger-hover: var(--c-danger-hover);
+    --color-on-danger: var(--c-on-danger);
+    --color-danger-soft: var(--c-danger-soft);
+    --color-danger-ink: var(--c-danger-ink);
+    --color-info: var(--c-info);
+    --color-info-hover: var(--c-info-hover);
+    --color-on-info: var(--c-on-info);
+    --color-info-soft: var(--c-info-soft);
+    --color-info-ink: var(--c-info-ink);
+    --color-accent: var(--c-accent);
+    --color-accent-hover: var(--c-accent-hover);
+    --color-on-accent: var(--c-on-accent);
+    --color-accent-soft: var(--c-accent-soft);
+    --color-accent-ink: var(--c-accent-ink);
+    --color-focus: var(--c-focus);
+    --color-sidebar: var(--c-sidebar);
+    --color-sidebar-hover: var(--c-sidebar-hover);
+    --color-sidebar-active: var(--c-sidebar-active);
+    --color-sidebar-text: var(--c-sidebar-text);
+    --color-sidebar-muted: var(--c-sidebar-muted);
+    --color-sidebar-strong: var(--c-sidebar-strong);
+    --color-sidebar-accent: var(--c-sidebar-accent);
+    --color-on-sidebar-accent: var(--c-on-sidebar-accent);
+    --color-chart-1: var(--c-chart-1);
+    --color-chart-2: var(--c-chart-2);
+    --color-chart-3: var(--c-chart-3);
+    --color-chart-4: var(--c-chart-4);
+}
+
 /* Welcome tour: ring the element the current step points at. */
 [data-tour-active] {
-    outline: 3px solid var(--color-blue-500);
+    outline: 3px solid var(--color-focus);
     outline-offset: 3px;
     border-radius: 8px;
 }
@@ -46,4 +90,63 @@
 .help-prose ul { list-style: disc; padding-left: 1.25rem; }
 .help-prose li + li { margin-top: 0.25rem; }
 .help-prose p + p, .help-prose p + ol, .help-prose p + ul, .help-prose ol + p, .help-prose ul + p { margin-top: 0.5rem; }
-.help-prose strong { color: var(--color-gray-900); font-weight: 600; }
+.help-prose strong { color: var(--color-fg); font-weight: 600; }
+
+/*
+ * A scrolling table container is the positioning context for what it holds. Otherwise an absolutely
+ * positioned child, such as an sr-only label in a cell, escapes the clip and widens the whole page.
+ * In the base layer, so an explicit position utility on the container still wins.
+ */
+@layer base {
+    :where(.overflow-x-auto, .overflow-auto) {
+        position: relative;
+    }
+
+    /* Native checkboxes, radios and range inputs take the profile's accent. */
+    :where(input[type='checkbox'], input[type='radio'], input[type='range'], progress) {
+        accent-color: var(--color-accent);
+    }
+}
+
+/* Sign-in splash: a gentle pulse and a sliding bar, gone within 800 ms. */
+.app-splash {
+    transition: opacity 150ms ease-out;
+}
+
+.app-splash-leaving {
+    opacity: 0;
+}
+
+.app-splash-logo {
+    animation: app-splash-pulse 900ms ease-in-out infinite alternate;
+}
+
+.app-splash-bar > span {
+    animation: app-splash-slide 800ms ease-in-out infinite;
+}
+
+@keyframes app-splash-pulse {
+    from { transform: scale(0.96); opacity: 0.85; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes app-splash-slide {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(300%); }
+}
+
+/* Reduced motion, from the OS or the profile: never paint the splash, and stop decorative motion. */
+@media (prefers-reduced-motion: reduce) {
+    .app-splash {
+        display: none;
+    }
+}
+
+html[data-reduce-motion] *,
+html[data-reduce-motion] *::before,
+html[data-reduce-motion] *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+}

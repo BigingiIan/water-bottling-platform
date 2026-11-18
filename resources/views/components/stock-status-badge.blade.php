@@ -2,10 +2,10 @@
 
 @php
     [$label, $badgeClass, $dotClass] = match ($status) {
-        'out' => ['Out of stock', 'bg-red-100 text-[#991b1b]', 'bg-red-600'],
-        'critical' => ['Critical', 'bg-red-50 text-[#b91c1c]', 'bg-red-500'],
-        'low' => ['Low', 'bg-amber-50 text-[#b45309]', 'bg-amber-500'],
-        default => ['OK', 'bg-green-50 text-[#15803d]', 'bg-green-500'],
+        'out' => ['Out of stock', 'bg-danger-soft text-danger-ink', 'bg-danger'],
+        'critical' => ['Critical', 'bg-danger-soft text-danger-ink', 'bg-danger'],
+        'low' => ['Low', 'bg-warning-soft text-warning-ink', 'bg-warning'],
+        default => ['OK', 'bg-success-soft text-success-ink', 'bg-success'],
     };
 @endphp
 

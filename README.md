@@ -1,7 +1,5 @@
 # Integrated Water Bottling Operations Platform
 
-Final Year Project (U-CS 106), Strathmore University.
-
 AquaOps is an internal operations platform for Kenyan water bottling SMEs. It brings production, inventory, orders, invoicing and revenue into one role-based system, adds request-based communication between departments, and uses a machine learning service for daily demand forecasting. Prophet, XGBoost, an LSTM and stacked combinations were evaluated; Prophet alone is served because it scored best on the held-out test.
 
 > **Status:** work in progress. See [Project status](#project-status) for what is built, what is pending, and known limitations.
@@ -14,7 +12,9 @@ AquaOps is an internal operations platform for Kenyan water bottling SMEs. It br
 - [Tech stack](#tech-stack)
 - [Features](#features)
 - [Getting started](#getting-started)
+- [Deploying to a host](#deploying-to-a-host)
 - [Test accounts](#test-accounts)
+- [Demo data](#demo-data)
 - [Machine learning](#machine-learning)
 - [Forecast integration](#forecast-integration)
 - [Scheduled commands](#scheduled-commands)
@@ -46,7 +46,7 @@ AquaOps is an internal operations platform for Kenyan water bottling SMEs. It br
 
 | Layer | Technology |
 |---|---|
-| Web backend | PHP 8.3+, Laravel 13, Livewire 4 |
+| Web backend | PHP 8.4+, Laravel 13, Livewire 4 |
 | Database | MySQL (SQLite in memory for tests) |
 | Frontend | Blade, Livewire, Alpine (bundled with Livewire), Tailwind CSS 4, Vite, Heroicons |
 | Charts | Inline SVG Blade components (no JavaScript chart library) |
@@ -61,7 +61,7 @@ Access is controlled per module. Each role has one of three levels per module: `
 
 ### Access control and staff
 - Five seeded roles (Administrator, Production Manager, Production Staff, Inventory Staff, Maintenance Staff) plus custom roles.
-- Twelve modules: Dashboard, Production, Inventory, Orders, Equipment, Forecasting, Invoicing, Revenue, Requests, Users & Roles, Settings, Error Logs.
+- Thirteen modules: Dashboard, Production, Inventory, Orders, Maintenance, Forecasting, Business Calendar, Invoicing, Revenue, Requests, Users & Roles, Settings, Error Logs.
 - **Staff Directory** (`/staff`):
   - Search and filters by role, status and module, plus a CSV export that respects the filters.
   - A row menu to change role, reset a password, or suspend and reactivate.
@@ -70,7 +70,9 @@ Access is controlled per module. Each role has one of three levels per module: `
   - Role cards with user and module counts.
   - A matrix with a None / View / Full control per cell. Changes are staged and saved together after a confirmation summary.
   - The Administrator role can never be reduced, and system roles can't be deleted.
-- Admin-created accounts only, with email invitations and a signed set-password link. Administrators can "View As" another user.
+- Admin-created accounts only. An invited user is emailed a temporary password (not a link), valid for 72 hours, and must set their own password at first sign-in. If it expires, an administrator issues a new one with Reset Password.
+- Only Administrators can invite, promote, demote, reset or suspend Administrators.
+- Administrators can "View As" another user; starting and ending it is recorded in the audit log.
 - Branded 403, 404 and 500 pages. 500 pages never show exception details.
 
 ### Dashboard
@@ -93,6 +95,25 @@ Access is controlled per module. Each role has one of three levels per module: `
 - Stock overview (`/inventory`) with per-product cover against the forecast, warehouse stock lines, batches, leakage reports and stock movements.
 - `StockService` records every change as a stock movement. Stock counts, adjustments and stock-in are recorded through it.
 - Leakage detection grades reports as Review or Investigate, from manual entries, batch checks and stock counts.
+
+### Equipment and maintenance
+- **Equipment** (`/maintenance`): every machine with its type, line, location and status (operational, needs attention, under maintenance, out of service).
+  - The list shows a status pill, the next preventive task and 30-day downtime.
+  - Each machine's page shows its preventive plans, its work-order history, and downtime over 30 and 90 days.
+- **Preventive maintenance plans:** a task repeated every N days, with a checklist and the role that does it. The next due date is stored, and is recomputed from the last completion.
+- **Work orders** (`WO-YYYY-0001`): preventive, corrective or inspection, from a plan, a request or a breakdown report.
+  - **Board:** Open, In progress and Done (last 30 days), with filters.
+  - **Each work order:** has its checklist, start and complete actions, downtime, parts and cost.
+- **Completing a preventive work order** reschedules its plan from the completion date.
+- **Returning equipment to service:** if the equipment is down, the person completing the work order is asked whether it is working again. The status is never changed for them.
+- **Daily generator:** `maintenance:generate-work-orders` creates one work order per plan due within two days, once per due date, and reminds the plan's role about overdue plans.
+- **Production schedule:**
+  - **Line status:** each line's worst equipment status and its 30-day downtime.
+  - **Warning:** scheduling a run on a line with equipment under maintenance or out of service shows a warning, but doesn't block it.
+- **Requests:** production can send Maintenance a request about a machine. Maintenance turns it into a corrective work order with one click, which moves the request to In progress.
+- **Notifications:** work order assigned, plan overdue, and equipment out of service (to production roles).
+- **Maintenance calendar:** overdue tasks, then the next eight weeks of due dates, including projected repeats.
+- **Access:** Maintenance Staff and administrators have Full access, production roles View, others none.
 
 ### Orders, invoicing and revenue
 - **Orders** (`/orders`): draft, confirm (reserves stock), dispatch (deducts stock oldest batch first), deliver, or cancel. Order numbers run sequentially per year.
@@ -123,7 +144,54 @@ Request-based communication lets a user ask another department to act without be
 
 ### Forecasting
 - The forecasting page (`/forecasting`) shows 30 days of history against stored forecasts, tomorrow's cover per SKU, and why a forecast is unavailable when it is.
+- **Calendar chips:** each product's card shows "Promotion planned" and "Public holiday" chips for the next seven days they affect.
+- **Temperature source:** the page shows where the temperature values came from.
+- **School-term warning:** the page warns when the next 30 days fall in a year with no school terms recorded.
+
+### Business Calendar
+The Business Calendar (`/calendar`) is the single place to manage the forecast's context features: `is_promotion`, `is_public_holiday`, `is_school_term` and `temperature_c` in `daily_sku_features`.
+
+- **Public holidays:** recurring holidays (same month and day every year) or one-off dates.
+  - Only Kenya's eight fixed-date holidays are seeded.
+  - Movable holidays such as Good Friday, Easter Monday and Eid are entered each year once announced, so nothing is guessed.
+- **School terms:** year, term (1–3) and dates, with none seeded for future years. A day outside every recorded term counts as a school holiday.
+- **Promotions:** a promotion runs for a date range on one product or all products, with a type and an optional discount.
+  - Its status (planned, active or ended) is computed from the dates.
+  - Promotions only set the forecast flag and never change order prices.
+- **Views:** a month view shows holidays, terms and promotions as labelled, coloured bands, and each has a list with add, edit and delete.
+- **Rebuilding the features:** every change rebuilds the features for exactly the dates it touches (`ContextCalendar`), and `calendar:rebuild` runs nightly for the next 30 days.
+- **Protected history:** days already marked `sales_data_covered` are history the model has learned from. Changing them needs Full access and a reason, and is recorded in the audit log.
+- **Access:** administrators and production managers have Full access; every other role has View.
 - The footer shows a forecast-service status dot to roles with Forecasting access. It is checked at most once a minute and never delays a page.
+
+### Landing page and sign-in
+- **Public landing page (`/`):** the organisation's name and logo, one line on what the console does, a Sign in button, and four feature tiles: Production, Inventory, Orders, Forecasting.
+  - **Nothing private:** it shows no counts or business data.
+  - **Small:** no images apart from the logo, about 22 KB in all.
+  - **Signed-in users:** they skip it and go straight to their landing page (the dashboard unless they chose another).
+- **Logo:** uploaded in Settings → General (PNG, JPG or WebP, up to 256 KB and 1024 × 1024). SVG isn't accepted. It's stored privately and served from `/branding/logo`. Without one, the AquaOps mark is used.
+- **Sign-in transition:** after signing in, once per session, the first page shows the logo and "Preparing your dashboard" with a gentle animation.
+  - **Duration:** it ends when the page has loaded, or is fully gone by 800 ms, whichever comes first.
+  - **Not on navigation:** it never appears on normal page navigation.
+  - **Skipped:** entirely when the device asks for reduced motion, or when **Reduce motion** is on in the profile. That profile setting also turns off the app's other animations.
+
+### Navigation and layout
+- **Icon rail:** the sidebar collapses to a 64px icon rail.
+  - **Toggle:** the button at the foot of the sidebar, or press `[`.
+  - **In the rail:** labels appear as tooltips on hover and keyboard focus, the current page stays highlighted, and badges sit on the icons.
+- **Navigation groups:** each group (Production, Inventory, Maintenance, Finance, Analytics, System) collapses on its own. A collapsed group still shows the page you're on.
+- **Saved per user:** both the rail and the group states are saved in your preferences, not the browser, so they follow you to other devices. The server renders them on the first paint, so nothing shifts on load.
+- **Below 1024px:** the sidebar becomes a drawer opened from the menu button in the header. Focus stays inside it while it's open; Esc, the close button or the backdrop closes it and returns focus to the menu button. Content uses the full width.
+- **Wide tables:** they scroll inside their own container, and the page itself never scrolls sideways.
+
+### Appearance
+- **Theme modes:** Light, Dark or System. System follows the device's own light or dark setting.
+- **Colour profiles:** Ocean (the AquaOps blue, default), Forest, Slate, Sunset and High contrast. Each one defines light and dark values for the same design tokens: background, surfaces, borders, text, accent, status colours, sidebar and chart series.
+- **Who decides:** administrators set the organisation default in Settings → Appearance, where a preview strip shows every profile in light and dark. Anyone can override it in My Profile → Preferences, or pick "Organisation default" to follow it again.
+- **No flash:** the theme is chosen on the server and written into the page head before the first paint. System mode needs no script, because the browser picks between the two token sets itself.
+- **Status colours stay recognisable:** success is always green, warning amber, danger red and info blue. Only their shade changes between profiles.
+- **Checked for contrast:** every text pair meets WCAG AA (4.5:1) and every control, border and chart series meets 3:1, in every profile and mode.
+- **Kept fixed on purpose:** the invoice document (PDF and on screen) stays black on white like paper, the invitation email keeps its own colours, and the error pages always use Ocean light because they work without the database or the asset build.
 
 ### Help and onboarding
 - **Help centre** (`/help`): linked from the footer, the profile menu and each page title.
@@ -147,7 +215,7 @@ Request-based communication lets a user ask another department to act without be
 ## Getting started
 
 ### Prerequisites
-- PHP 8.3 or later and Composer
+- PHP 8.4 or later with the `bcmath` extension, and Composer
 - Node.js (20.19+ or 22.12+, as required by Vite 8) and npm
 - MySQL
 - Python 3.11 or later and [`uv`](https://docs.astral.sh/uv/) for the prediction service
@@ -173,11 +241,24 @@ composer run dev        # or: php artisan serve, plus npm run dev
 
 `composer run setup` does the install, key, migrate and build steps in one go, but doesn't seed.
 
-The database seeder creates roles, modules, permissions, production lines and daily SKU features. In `local` and `testing` it also creates the [test accounts](#test-accounts). Optional demo data, for local use only:
+The database seeder creates roles, modules, permissions, production lines, the fixed-date public holidays and daily SKU features. In `local` and `testing` it also creates the [test accounts](#test-accounts).
+
+To see every page with a year of believable data, load the [demo business](#demo-data) (local and testing only):
 
 ```bash
-php artisan db:seed --class=DemoDataSeeder          # inventory demo data
-php artisan db:seed --class=ForecastingDemoSeeder   # 60 days of sales history from data/kenya_water_demand_daily.csv
+php artisan demo:seed --fresh    # rebuilds the database, then about 30 s for 365 days
+php artisan demo:verify          # checks the data hangs together
+php artisan demo:clear           # removes the demo rows again
+```
+
+The older `DemoDataSeeder` and `ForecastingDemoSeeder` still work for a small inventory demo and 60 days of sales history.
+
+On a database migrated before the Business Calendar existed, seed the fixed holidays and fill the next 30 days once:
+
+```bash
+php artisan migrate
+php artisan db:seed --class=PublicHolidaySeeder
+php artisan calendar:rebuild
 ```
 
 Useful `.env` keys:
@@ -198,10 +279,10 @@ From the repository root, in PowerShell:
 
 ```powershell
 $env:ML_MODEL_DIR = "$PWD\ml\outputs\saved_models"
-uv run --directory ml uvicorn serving.api:app --app-dir . --host 0.0.0.0 --port 8001
+uv run --directory ml uvicorn serving.api:app --app-dir . --host 127.0.0.1 --port 8001
 ```
 
-Set `ML_MODEL_DIR` explicitly. If you don't, the service falls back to `ml/saved_models`, which holds an older stacked bundle. Laravel reads its manifests from `ml/outputs/saved_models`, the current Prophet-only bundle written by the training pipeline, so both sides should point there. Training, evaluation and the bundle format are documented in [`ml/README.md`](ml/README.md).
+Both the service and Laravel default to `ml/outputs/saved_models`, the current Prophet-only bundle written by the training pipeline. Set `ML_MODEL_DIR` only to point both somewhere else. Training, evaluation and the bundle format are documented in [`ml/README.md`](ml/README.md).
 
 The optional model dashboard:
 
@@ -209,6 +290,29 @@ The optional model dashboard:
 cd ml
 uv run streamlit run dashboard/app.py
 ```
+
+## Deploying to a host
+
+The app needs PHP 8.4+ with `bcmath`, MySQL, Node for the asset build, a cron entry for the scheduler, and (for forecasts) the prediction service on a private address.
+
+```bash
+composer install --no-dev --optimize-autoloader
+npm ci && npm run build
+php artisan migrate --force
+php artisan db:seed --force        # roles, modules, permissions, product catalogue, production lines
+php artisan app:create-admin       # first administrator; the password is typed at a hidden prompt
+php artisan config:cache && php artisan route:cache && php artisan view:cache
+```
+
+- **Environment:** start from `.env.example` and apply its "Production" block: `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://…`, `SESSION_SECURE_COOKIE=true`, and `TRUSTED_PROXIES=*` when the host terminates TLS in front of the app.
+- **Mail:** set a real `MAIL_MAILER`. Never leave `MAIL_MAILER=log` on a host: invitation emails contain a temporary password and would be written to the log file.
+- **Scheduler:** run `php artisan schedule:run` every minute from cron. Without it there is no day close, so forecasts never become ready, and no preventive work orders or overdue reminders.
+- **Test and demo data:** `TestUserSeeder` and the `demo:*` commands refuse to run outside `local` and `testing`.
+- **Prediction service:** install with `uv sync --frozen`, run one uvicorn worker bound to localhost or a private network, and set `ML_API_TOKEN` on the service to the same value as Laravel's `ML_FORECAST_TOKEN`. Never expose port 8001 or the Streamlit dashboard publicly; leave `ML_DASHBOARD_URL` unset in production. See [`ml/README.md`](ml/README.md).
+- **Model files:** `ml/outputs/saved_models` (about 6 MB) is no longer git-ignored, so commit it for the host to receive the models.
+- **Logo storage:** the organisation logo is stored on the `local` disk. On a host with ephemeral storage set `BRANDING_DISK` to a persistent disk, or the logo is lost on redeploy.
+- **Security headers:** every page sends `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` and `X-Robots-Tag: noindex`, plus HSTS over HTTPS. There is no Content-Security-Policy yet.
+- **Health check:** `GET /up`.
 
 ## Test accounts
 
@@ -223,6 +327,54 @@ uv run streamlit run dashboard/app.py
 | Maintenance Staff | `maintenance@aquaops.test` |
 
 Never run this seeder against a shared or production database.
+
+## Demo data
+
+`php artisan demo:seed {--days=365} {--customers=40} {--fresh}` builds a business that has been trading for a year. Everything in it is consistent:
+
+- **Sales:** `data/kenya_water_demand_daily.csv` replayed for the last `--days` days (ending yesterday), plus today as a closed trading day. Each SKU's daily units are split into orders across invented retailers, distributors, offices and schools. Schools buy in term time, offices on weekdays. Orders are dispatched oldest stock first and delivered the same day, with sales transactions and stock movements.
+- **Production:** one run and batch per SKU each morning, sized to cover the day's sales plus a buffer, with production logs and intake and bottled volumes.
+  - **Normal process loss** is 2 to 3%.
+  - **Flagged batches:** five trip the review threshold and two trip investigate, graded by the real `LeakageDetector`.
+  - **Drift:** 1L loss creeps up over the last ten days until the anomaly check flags it.
+- **Inventory:** weekly Saturday counts, mostly exact, a few bottles short now and then, and one count that trips review. Stock never goes negative and `level_after` chains on every line. At the end 5L is low and 10L is critical, so every status shows.
+- **Invoices and payments:**
+  - **Invoiced:** about 90% of orders, with VAT.
+  - **Paid by:** M-Pesa, cash and bank transfer, with realistic-looking but fake references.
+  - **Overdue:** about 10% of recent invoices, some part paid, across all four aging buckets.
+- **Calendar:** the fixed holidays, school terms for the period, and eight promotions: past ones, one running now and one planned.
+- **Maintenance:** 15 machines across both lines and the treatment plant, with 17 preventive plans worked through the year.
+  - **Breakdowns:** with downtime, parts and cost.
+  - **Now:** the Line 02 labeller is out of service and one plan is overdue.
+- **Around it:** requests between departments in every status, notifications, audit log entries and a few error events.
+- **Close and forecast:** after the data is written, `sales:close-day` runs for every day and `forecasts:generate` for tomorrow. If the prediction service isn't running, the forecasts are skipped. This evening's open orders are added after the close, so today still counts as forecast history.
+
+Generation is deterministic: a fixed Faker seed gives the same data for the same day, so screenshots are reproducible. Rows are bulk-inserted with explicit ids, and each table's demo id range is recorded in `demo_data_ranges`, which is what `demo:clear` removes. Products, roles, production lines and holidays are kept.
+
+Without `--fresh`, the command replaces earlier demo data. It refuses to run if the database already has orders or stock that aren't demo data. Both `demo:seed` and `demo:clear` refuse to run outside `local` and `testing`.
+
+`php artisan demo:verify` checks:
+
+- stock never goes negative and matches the ledger;
+- order lines and invoices add up (lines plus VAT);
+- payments never exceed totals;
+- every SKU has 14 or more covered days;
+- every stock status and aging bucket shows;
+- every page's main query returns rows.
+
+### Demo accounts
+
+Every demo account uses the password `aquaops-demo`. Use it on a local machine only, never anywhere else.
+
+| Role | Accounts |
+|---|---|
+| Administrator | `wanjiru.admin@demo.aquaops.test`, `brian.admin@demo.aquaops.test` |
+| Production Manager | `achieng.prodmgr@demo.aquaops.test`, `kevin.prodmgr@demo.aquaops.test` |
+| Production Staff | `daniel.production@demo.aquaops.test`, `faith.production@demo.aquaops.test` |
+| Inventory Staff | `grace.inventory@demo.aquaops.test`, `samuel.inventory@demo.aquaops.test` |
+| Maintenance Staff | `peter.maintenance@demo.aquaops.test`, `mercy.maintenance@demo.aquaops.test` |
+
+Every name, customer, school and machine maker in the demo is invented.
 
 ## Machine learning
 
@@ -276,13 +428,22 @@ Averaged over 1 to 28 days ahead, Prophet's RMSE is 122.2 and its MAPE is 12.69%
 
 ## Forecast integration
 
-`POST /predict` returns a prediction with `model_version` and `rmse_score`, and `GET /health` reports reachability and the model version served per SKU.
+The service has three endpoints:
+
+- **`POST /predict`:** returns a prediction with `model_version` and `rmse_score`.
+- **`GET /health`:** reports reachability and the model version served per SKU.
+- **`GET /climatology`:** returns the monthly mean temperatures each served bundle scores with.
 
 How Laravel builds a request:
 
 - **History:** daily `units_sold` from `sales_transactions.quantity`, joined through `warehouse_stock` to `products`. A missing day counts as zero **only** if that SKU and date are marked `sales_data_covered`; otherwise the history is incomplete.
 - **Requirement:** 14 consecutive covered history days plus complete features.
-- **Features:** read from `daily_sku_features` (`is_promotion`, `is_public_holiday`, `is_school_term`, `temperature_c`).
+- **Features:** read from `daily_sku_features` (`is_promotion`, `is_public_holiday`, `is_school_term`, `temperature_c`, plus `temperature_source`).
+  - **Flags:** written by the [Business Calendar](#business-calendar).
+  - **Temperature:**
+    - The served model scores with the monthly mean temperatures in its bundle (`temperature_source = monthly_mean`) and ignores the value sent, but Laravel still requires one.
+    - `temperature_c` is filled from `GET /climatology`, cached for a day, falling back to the same means in the manifests under `ML_MODEL_DIR` when the service is down.
+    - There is deliberately no weather API: a `TemperatureSource` interface has only the monthly-mean implementation, because live temperatures would only matter if the model were retrained on them.
 - **Persistence:** results are upserted into `forecast_records`, keyed by product, forecast date and model version, so re-renders never create duplicates.
 
 Each SKU needs a model bundle with a manifest (`model_version` and `rmse_score`). Until a SKU has both, its forecast stays unavailable.
@@ -294,6 +455,8 @@ All run in the operations timezone (the `organisation.timezone` setting, default
 | Command | When | What it does |
 |---|---|---|
 | `errors:prune` | daily | Deletes error events past the configured retention period |
+| `maintenance:generate-work-orders` | 06:00 | Creates work orders for preventive plans due within two days (once per due date) and reminds about overdue plans |
+| `calendar:rebuild` | 00:30 | Rewrites the next 30 days of forecast context from the Business Calendar (`calendar:rebuild {from} {to}` by hand; `--include-covered` to rewrite history) |
 | `sales:close-day` | 17:45 | Marks the day's sales complete for forecasting, once no order dated that day is still open |
 | `forecasts:generate` | 18:00 | Generates tomorrow's forecasts |
 | `invoices:notify-overdue` | 08:00 | Notifies invoicing users about each overdue invoice, once |
@@ -303,12 +466,15 @@ All run in the operations timezone (the `organisation.timezone` setting, default
 
 ```
 app/
-  Console/Commands/         Scheduled commands (forecasts, sales day, overdue invoices and requests)
+  Console/Commands/         Scheduled commands (forecasts, sales day, overdue invoices and requests), demo:seed / verify / clear
   Http/Controllers/         Login, password set, View As, access requests, invoice PDFs
   Livewire/                 Pages and modals; Dashboard/ holds the dashboard widgets
   Models/                   Eloquent models
   Services/                 Domain services: Dashboard, Forecasting, Inventory, Invoicing, Leakage,
-                            Orders, Requests, Revenue, plus MLForecastClient, NotificationService, SettingsService
+                            Orders, Requests, Revenue, Calendar (ContextCalendar, CalendarService, TemperatureSource),
+                            Maintenance (MaintenanceService, LineStatus),
+                            Demo (DemoDataBuilder, DemoDataset, DemoDataVerifier, DemoDataCleaner),
+                            plus MLForecastClient, NotificationService, SettingsService
   Support/                  Shared helpers: ModuleAccess, YearlySequence, SettingsDate, dashboard registry
 config/settings.php         Setting definitions (defaults, validation, Settings tabs)
 lang/en/help.php            Help centre, tour, popover and empty-state text
@@ -328,10 +494,13 @@ tests/                      Feature and unit tests
 
 ```bash
 php artisan test                 # Laravel suite (in-memory SQLite)
+npm run a11y                     # axe accessibility check (needs the app running)
 cd ml && uv run pytest           # prediction service and dashboard
 ```
 
-The Laravel suite covers access control at every boundary: per-module permissions, request visibility and snapshots, widget gating, which help guides and popovers each role sees, and fixed query counts. A structure test checks that every guide has the required sections and 3 to 6 tasks.
+`npm run a11y` signs in to the running app (default `http://localhost:8000` as `admin@aquaops.test`), switches that account to Dark + Ocean, runs axe-core (WCAG 2.1 A and AA) on 13 main pages in a headless Edge or Chrome, then restores the account's own theme. Other combinations: `A11Y_THEME=light A11Y_PROFILE=sunset npm run a11y`. `A11Y_BASE_URL`, `A11Y_EMAIL`, `A11Y_PASSWORD` and `A11Y_BROWSER` are also read.
+
+The Laravel suite covers access control at every boundary: per-module permissions, request visibility and snapshots, widget gating, which help guides and popovers each role sees, and fixed query counts. A structure test checks that every guide has the required sections and 3 to 6 tasks. `AppearanceContrastTest` checks every token pair in every profile and mode for WCAG AA, and that status colours keep their hue. `DesignTokenUsageTest` fails if a view or component uses a raw Tailwind palette class or a literal colour. `DemoDataTest` seeds 30 days of demo data and asserts that `demo:verify` passes, that the same day gives the same data, and that `demo:clear` removes it.
 
 ## Project status
 
@@ -348,15 +517,19 @@ The Laravel suite covers access control at every boundary: per-module permission
 | Requests between departments | Complete |
 | Settings, notifications and audit log | Complete |
 | Prediction service, training pipeline and Laravel client | Complete (Prophet served) |
-| Equipment / maintenance module | Planned (the module exists for permissions only) |
+| Equipment and maintenance (equipment, plans, work orders, downtime, line warnings) | Complete |
 | Reports | Planned (sidebar placeholder) |
-| Promotion and temperature data sources for live use | Pending. A source isn't chosen yet. |
+| Business Calendar (holidays, school terms, promotions, temperature from model climatology) | Complete |
 | In-app help (Help centre, page-title help, welcome tour, empty states) | Complete |
 
 ### Known limitations
 - `sales_data_covered` defaults to `false`. `sales:close-day` marks a day covered once no order dated that day is still open, and forecasts need 14 consecutive covered days.
-- School terms are a documented month-based approximation, and Eid dates aren't inferred.
+- **School terms and movable holidays are entered by hand.** School terms need entering each year, and movable holidays (Good Friday, Easter Monday, Eid) once each is announced.
+- **Holidays aren't moved:** a holiday that falls on a Sunday isn't moved to the Monday automatically; add the observed day as a one-off.
 - Invoices are internal only: there's no eTIMS/KRA integration, no credit notes (corrections are void then reissue), and invoices aren't emailed.
-- Revenue days are grouped in UTC, not Nairobi local time.
+- **Dates between midnight and 03:00 Nairobi time:** timestamps are stored in UTC and "today" on documents and reports follows UTC, so an order or invoice created in those three hours gets the previous day's date, and revenue days are grouped in UTC. Scheduled jobs already use the organisation timezone.
+- **Products, prices and production lines** come from the seeders; there is no screen to add or reprice a product yet.
+- **A production schedule can't be edited or cancelled** once created.
+- **Stock from a run is added by hand** with Stock In. It must match the product the run bottled, but the quantity isn't checked against the units logged.
 - Below the `lg` breakpoint the sidebar becomes a slide-out menu, and wide tables scroll horizontally inside their cards.
 - In a hidden browser tab, dashboard polling slows down (Livewire throttles it) rather than stopping completely.

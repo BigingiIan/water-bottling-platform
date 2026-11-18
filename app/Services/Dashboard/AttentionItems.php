@@ -40,6 +40,7 @@ class AttentionItems
             ...$this->registry->canAccessModule($user, 'inventory') ? $this->leakageItems() : [],
             ...$this->registry->canAccessModule($user, 'orders') ? $this->orderItems() : [],
             ...$this->registry->canAccessModule($user, 'invoicing') ? $this->invoiceItems() : [],
+            ...$this->registry->canAccessModule($user, 'maintenance') ? $this->maintenanceItems() : [],
             ...$this->requestItems($user),
         ];
 
@@ -124,6 +125,38 @@ class AttentionItems
                 'occurredAt' => Carbon::parse($invoice->due_date),
             ])
             ->all();
+    }
+
+    /**
+     * Out-of-service equipment (critical) and overdue preventive tasks (high).
+     *
+     * @return list<array{key: string, severity: string, title: string, detail: string, url: string, occurredAt: CarbonInterface}>
+     */
+    private function maintenanceItems(): array
+    {
+        $outOfService = $this->metrics->equipmentNotOperational()
+            ->where('status', 'out_of_service')
+            ->take(self::LIMIT)
+            ->map(fn ($equipment): array => [
+                'key' => 'equipment-'.$equipment->id,
+                'severity' => 'critical',
+                'title' => "{$equipment->code} {$equipment->name} is out of service",
+                'detail' => $equipment->productionLine?->name ?? 'Not on a production line',
+                'url' => route('maintenance.equipment.show', $equipment),
+                'occurredAt' => Carbon::parse($equipment->updated_at),
+            ]);
+        $overdue = $this->metrics->maintenanceDue()['overdue']
+            ->take(self::LIMIT)
+            ->map(fn ($plan): array => [
+                'key' => 'maintenance-plan-'.$plan->id,
+                'severity' => 'high',
+                'title' => "Overdue maintenance: {$plan->task}",
+                'detail' => ($plan->equipment?->code ?? 'Equipment').' · due '.$this->settingsDate->formatDate($plan->next_due_on),
+                'url' => route('maintenance.equipment.show', $plan->equipment_id),
+                'occurredAt' => Carbon::parse($plan->next_due_on),
+            ]);
+
+        return [...$outOfService->values()->all(), ...$overdue->values()->all()];
     }
 
     /**

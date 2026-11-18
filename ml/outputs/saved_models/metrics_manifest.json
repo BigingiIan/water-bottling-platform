@@ -1,0 +1,69 @@
+{
+  "model_version": "2026-10-23T01:31:11Z",
+  "created_at": "2026-10-23T01:33:20+00:00",
+  "files": {
+    "fold_metrics": "forecast_metrics.csv",
+    "summary": "forecast_metrics_summary.csv"
+  },
+  "runs": [
+    {
+      "run": "development_baseline",
+      "period": "development",
+      "configuration": "Original hyperparameters for every model."
+    },
+    {
+      "run": "development_tuned",
+      "period": "development",
+      "configuration": "Every model tuned per fold on an inner window before the fold origin."
+    },
+    {
+      "run": "development_stacking",
+      "period": "development",
+      "configuration": "Stacker variants on Prophet (default), XGBoost (tuned), LSTM (default)."
+    },
+    {
+      "run": "final_test",
+      "period": "final_test",
+      "configuration": "Final configuration: Prophet and LSTM default, XGBoost nested-tuned."
+    },
+    {
+      "run": "final_test_stacking",
+      "period": "final_test",
+      "configuration": "Stacker variants on final_test; Prophet alone was chosen beforehand."
+    }
+  ],
+  "final_test_runs": [
+    "final_test",
+    "final_test_stacking"
+  ],
+  "reported_estimate": {
+    "run": "final_test",
+    "model": "Prophet",
+    "horizon": "h1",
+    "temperature_mode": "climatology",
+    "per_sku_rmse": {
+      "10L": 24.981,
+      "1L": 174.7791,
+      "20L": 14.8305,
+      "500ml": 338.8365,
+      "5L": 52.9096
+    },
+    "mean_of_skus": {
+      "RMSE_mean": 121.2673,
+      "RMSE_fold_sd": 9.0084,
+      "MAPE_mean": 12.8574,
+      "MAPE_fold_sd": 1.27,
+      "sMAPE_mean": 12.3569,
+      "sMAPE_fold_sd": 1.0535
+    }
+  },
+  "metrics": {
+    "RMSE": "units/day; per-horizon RMSE averaged over the horizons in the bucket",
+    "MAPE": "percent",
+    "sMAPE": "percent"
+  },
+  "notes": [
+    "All metrics come from pre-refit models evaluated with rolling origins.",
+    "The data is synthetic (generator seed 42) and its structure suits Prophet; these are not real-world accuracy estimates."
+  ]
+}

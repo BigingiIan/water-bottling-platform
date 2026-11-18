@@ -1,19 +1,22 @@
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import os
 import re
+import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import date, timedelta
+from importlib import metadata
 from pathlib import Path
 from typing import Annotated, Any
 
 import joblib
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from serving.inference import ForecastBundle, is_weighted_bundle, load_bundle, predict_sku
@@ -39,6 +42,8 @@ DEFAULT_XGBOOST_FEATURE_COLUMNS = (
     "day_of_week",
 )
 DEFAULT_LOOKBACK = 14
+MAX_HISTORY_DAYS = 400
+DEFAULT_MODEL_DIR = Path(__file__).resolve().parents[1] / "outputs" / "saved_models"
 
 
 class FeaturePoint(BaseModel):
@@ -57,7 +62,7 @@ class PredictionRequest(BaseModel):
 
     sku: Annotated[str, Field(min_length=1, max_length=64)]
     date: date
-    history: Annotated[list[FeaturePoint], Field(min_length=DEFAULT_LOOKBACK)]
+    history: Annotated[list[FeaturePoint], Field(min_length=DEFAULT_LOOKBACK, max_length=MAX_HISTORY_DAYS)]
     is_promotion: bool
     is_public_holiday: bool
     is_school_term: bool
@@ -102,7 +107,8 @@ class ModelBundle:
 class ModelRegistry:
     def __init__(self, model_dir: Path) -> None:
         self.model_dir = model_dir
-        self.models: dict[str, ModelBundle] = {}
+        self.models: dict[str, ModelBundle | ForecastBundle] = {}
+        self.failed: list[str] = []
 
     def load_available(self) -> None:
         if not self.model_dir.exists():
@@ -115,10 +121,17 @@ class ModelRegistry:
                 logger.warning("Ignoring unsafe SKU model directory: %s", sku_dir)
                 continue
 
+            # Any failure (including AttributeError or UnpicklingError from a library-version
+            # mismatch) drops this SKU only; the rest of the registry still loads.
             try:
-                self.models[sku] = self._load_bundle(sku_dir)
-            except (OSError, ValueError, KeyError, TypeError, ImportError):
-                logger.exception("Unable to load model artifacts for SKU %s", sku)
+                bundle = self._load_bundle(sku_dir)
+            except Exception as exception:
+                self.failed.append(sku)
+                logger.exception("Unable to load model artifacts for SKU %s: %s", sku, exception)
+                continue
+
+            self.models[sku] = bundle
+            _warn_on_library_version_drift(sku, bundle.manifest)
 
     def _load_bundle(self, sku_dir: Path) -> ModelBundle | ForecastBundle:
         manifest_path = sku_dir / "manifest.json"
@@ -173,6 +186,41 @@ class ModelRegistry:
             meta_learner=joblib.load(sku_dir / "meta_learner.joblib"),
             manifest=manifest,
         )
+
+
+def _major_minor(version: str) -> str:
+    return ".".join(version.split(".")[:2])
+
+
+def _warn_on_library_version_drift(sku: str, manifest: dict[str, Any]) -> None:
+    """Warn when a bundle was trained with a different major.minor of a library than is running."""
+    recorded = manifest.get("library_versions")
+    if not isinstance(recorded, dict):
+        return
+
+    for library, trained_version in sorted(recorded.items()):
+        if not isinstance(library, str) or not isinstance(trained_version, str):
+            continue
+
+        if library == "python":
+            running_version = ".".join(str(part) for part in sys.version_info[:3])
+        else:
+            try:
+                running_version = metadata.version(library)
+            except metadata.PackageNotFoundError:
+                logger.warning(
+                    "SKU %s was trained with %s %s, which is not installed", sku, library, trained_version
+                )
+                continue
+
+        if _major_minor(running_version) != _major_minor(trained_version):
+            logger.warning(
+                "SKU %s was trained with %s %s but %s is running",
+                sku,
+                library,
+                trained_version,
+                running_version,
+            )
 
 
 def _estimator(value: Any) -> Any:
@@ -296,16 +344,34 @@ def predict_units(bundle: ModelBundle, request: PredictionRequest) -> float:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    model_dir = Path(
-        os.environ.get(
-            "ML_MODEL_DIR",
-            str(Path(__file__).resolve().parents[1] / "saved_models"),
+    app.state.api_token = os.environ.get("ML_API_TOKEN", "").strip()
+    if not app.state.api_token:
+        logger.warning(
+            "ML_API_TOKEN is not set: the forecast service is running without authentication"
         )
-    )
-    registry = ModelRegistry(model_dir)
+
+    registry = ModelRegistry(Path(os.environ.get("ML_MODEL_DIR") or DEFAULT_MODEL_DIR))
     registry.load_available()
     app.state.models = registry.models
+    app.state.failed_skus = registry.failed
     yield
+
+
+def require_api_token(request: Request) -> None:
+    """Require `Authorization: Bearer <ML_API_TOKEN>` on every endpoint when the token is configured."""
+    expected: str = getattr(request.app.state, "api_token", "")
+    if not expected:
+        return
+
+    scheme, _, supplied = request.headers.get("Authorization", "").partition(" ")
+    if scheme.lower() != "bearer" or not hmac.compare_digest(
+        supplied.strip().encode("utf-8"), expected.encode("utf-8")
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Missing or invalid API token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 app = FastAPI(
@@ -314,6 +380,7 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
     lifespan=lifespan,
+    dependencies=[Depends(require_api_token)],
 )
 
 
@@ -327,7 +394,43 @@ def health(request: Request) -> dict[str, Any]:
         if isinstance(model_version, str) and model_version.strip() and len(model_version) <= 255:
             served_versions[sku] = model_version
 
-    return {"status": "ok", "models": served_versions}
+    return {
+        "status": "ok",
+        "models": served_versions,
+        "failed": sorted(getattr(request.app.state, "failed_skus", [])),
+    }
+
+
+@app.get("/climatology")
+def climatology(request: Request) -> dict[str, Any]:
+    """Monthly mean temperatures each served bundle scores with, read from its manifest.
+
+    Laravel stores these in daily_sku_features.temperature_c so the value on record is the one the model
+    uses. Bundles without a complete month 1-12 climatology are left out.
+    """
+    models: dict[str, ModelBundle | ForecastBundle] = request.app.state.models
+    served: dict[str, dict[str, Any]] = {}
+
+    for sku, bundle in sorted(models.items()):
+        months = bundle.manifest.get("temperature_climatology")
+        if not isinstance(months, dict):
+            continue
+
+        try:
+            means = {str(month): float(months[str(month)]) for month in range(1, 13)}
+        except (KeyError, TypeError, ValueError):
+            continue
+
+        if not all(np.isfinite(value) for value in means.values()):
+            continue
+
+        source = bundle.manifest.get("temperature_source")
+        served[sku] = {
+            "temperature_source": source if isinstance(source, str) and source else "monthly_mean",
+            "months": means,
+        }
+
+    return {"models": served}
 
 
 @app.post("/predict")
@@ -360,6 +463,13 @@ def predict(payload: PredictionRequest, request: Request) -> dict[str, str | flo
     except (KeyError, TypeError, ValueError) as exception:
         logger.exception("Prediction failed for SKU %s", payload.sku)
         raise HTTPException(status_code=503, detail="The model could not score this request") from exception
+    except Exception as exception:
+        logger.exception("Prediction crashed for SKU %s", payload.sku)
+        raise HTTPException(status_code=500, detail="The forecast service failed to score this request") from exception
+
+    if not np.isfinite(units_sold):
+        logger.error("Prediction for SKU %s was not finite", payload.sku)
+        raise HTTPException(status_code=503, detail="The model could not score this request")
 
     return {
         "predicted_units_sold": units_sold,

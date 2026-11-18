@@ -17,6 +17,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Branding Disk
+    |--------------------------------------------------------------------------
+    |
+    | The disk that holds the uploaded organisation logo. The private local
+    | disk suits a single server; on a host with ephemeral storage point it
+    | at object storage (for example "s3") so the logo survives a deploy.
+    |
+    */
+
+    'branding_disk' => env('BRANDING_DISK', 'local'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------
     |

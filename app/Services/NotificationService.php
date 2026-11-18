@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Models\DepartmentRequest;
+use App\Models\Equipment;
 use App\Models\ErrorEvent;
 use App\Models\Invoice;
 use App\Models\LeakageReport;
+use App\Models\MaintenancePlan;
 use App\Models\Module;
 use App\Models\Order;
 use App\Models\Payment;
@@ -13,6 +15,7 @@ use App\Models\Product;
 use App\Models\ProductionSchedule;
 use App\Models\RequestComment;
 use App\Models\User;
+use App\Models\WorkOrder;
 use App\Notifications\SystemNotification;
 use App\Services\Leakage\LeakageDetector;
 use App\Services\Orders\Money;
@@ -300,6 +303,69 @@ class NotificationService
                 'severity' => 'warning',
                 'key' => "request:{$request->id}:overdue",
             ], null);
+        });
+    }
+
+    public function workOrderAssigned(WorkOrder $workOrder, ?User $actor): void
+    {
+        $this->guard('maintenance', function () use ($workOrder, $actor): void {
+            $workOrder->loadMissing(['assignee', 'equipment:id,code,name']);
+
+            if ($workOrder->assignee === null) {
+                return;
+            }
+
+            $this->send(new Collection([$workOrder->assignee]), [
+                'type' => 'maintenance.work_order_assigned',
+                'title' => "{$workOrder->reference} assigned to you",
+                'body' => ($workOrder->equipment?->code ?? 'Equipment').' · '.mb_strimwidth($workOrder->description, 0, 120, '…'),
+                'url' => route('maintenance.work-orders.show', $workOrder, absolute: false),
+                'severity' => $workOrder->priority === 'urgent' ? 'warning' : 'info',
+                'key' => "work-order:{$workOrder->id}:assigned:{$workOrder->assigned_to}",
+            ], $actor);
+        });
+    }
+
+    /**
+     * Overdue preventive work goes to the plan's role, or to everyone with full maintenance access.
+     */
+    public function maintenancePlanOverdue(MaintenancePlan $plan): void
+    {
+        $this->guard('maintenance', function () use ($plan): void {
+            $plan->loadMissing('equipment:id,code,name');
+            $recipients = $plan->assigned_role_id !== null
+                ? User::query()->where('status', '!=', 'suspended')->where('role_id', $plan->assigned_role_id)->get()
+                : $this->usersWithModuleAccess(['maintenance'], ['full']);
+
+            $this->send($recipients, [
+                'type' => 'maintenance.plan_overdue',
+                'title' => "Overdue: {$plan->task}",
+                'body' => ($plan->equipment?->code ?? 'Equipment').' was due '.app(SettingsDate::class)->formatDate($plan->next_due_on).'.',
+                'url' => route('maintenance.calendar', absolute: false),
+                'severity' => 'warning',
+                'key' => "maintenance-plan:{$plan->id}:overdue:{$plan->next_due_on->toDateString()}",
+            ], null);
+        });
+    }
+
+    /**
+     * Production roles hear when a machine stops so they can plan around it.
+     */
+    public function equipmentOutOfService(Equipment $equipment, ?User $actor): void
+    {
+        $this->guard('maintenance', function () use ($equipment, $actor): void {
+            $equipment->loadMissing('productionLine:id,name');
+
+            $this->send($this->usersWithModuleAccess(['production'], ['view', 'full']), [
+                'type' => 'maintenance.equipment_out_of_service',
+                'title' => "{$equipment->name} is out of service",
+                'body' => $equipment->productionLine !== null
+                    ? "{$equipment->code} on {$equipment->productionLine->name}. Check before scheduling runs on that line."
+                    : "{$equipment->code} is out of service.",
+                'url' => route('maintenance.equipment.show', $equipment, absolute: false),
+                'severity' => 'critical',
+                'key' => "equipment:{$equipment->id}:out_of_service",
+            ], $actor);
         });
     }
 

@@ -67,8 +67,7 @@ class StockService
         $forecast = $product->forecastRecords()
             ->whereDate('forecast_date', today()->addDay())
             ->where('horizon_days', 1)
-            ->orderByDesc('model_version')
-            ->orderByDesc('id')
+            ->latestGenerated()
             ->first();
 
         if ($forecast === null || (float) $forecast->predicted_demand <= 0) {

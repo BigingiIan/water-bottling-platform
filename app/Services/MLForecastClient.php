@@ -8,12 +8,15 @@ use App\Services\Forecasting\ForecastStatus;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class MLForecastClient
 {
+    public const string UNAUTHORIZED_MESSAGE = 'The ML service rejected the access token. Set ML_FORECAST_TOKEN to match the ML_API_TOKEN the service runs with.';
+
     /**
      * @var array{reachable: bool, models: array<string, string>, error: ?string}|null
      */
@@ -87,8 +90,7 @@ class MLForecastClient
         ];
 
         try {
-            $response = Http::connectTimeout(1)
-                ->timeout((int) config('services.ml_forecast.timeout', 3))
+            $response = $this->request((int) config('services.ml_forecast.timeout', 3))
                 ->post($this->serviceUrl().'/predict', $payload);
         } catch (ConnectionException $exception) {
             Log::warning('ML forecast service is unavailable.', [
@@ -106,6 +108,10 @@ class MLForecastClient
                 'date' => $date,
                 'status' => $response->status(),
             ]);
+
+            if ($response->status() === 401) {
+                return ForecastOutcome::failed(ForecastStatus::Unauthorized, $sku, $date);
+            }
 
             $detail = $response->json('detail');
 
@@ -191,9 +197,13 @@ class MLForecastClient
         }
 
         try {
-            $response = Http::connectTimeout(1)->timeout(2)->get($this->serviceUrl().'/health');
+            $response = $this->request(2)->get($this->serviceUrl().'/health');
         } catch (ConnectionException) {
             return $this->health = ['reachable' => false, 'models' => [], 'error' => "No response from {$this->serviceUrl()}."];
+        }
+
+        if ($response->status() === 401) {
+            return $this->health = ['reachable' => false, 'models' => [], 'error' => self::UNAUTHORIZED_MESSAGE];
         }
 
         if ($response->status() === 404) {
@@ -211,8 +221,55 @@ class MLForecastClient
         return $this->health = ['reachable' => true, 'models' => $models, 'error' => null];
     }
 
+    /**
+     * Monthly mean temperatures each served bundle scores with (GET /climatology), keyed by SKU.
+     * Returns null when the service can't be reached or answers with something unusable.
+     *
+     * @return array<string, array{source: string, months: array<string, float>}>|null
+     */
+    public function climatology(): ?array
+    {
+        try {
+            $response = $this->request(3)->get($this->serviceUrl().'/climatology');
+        } catch (ConnectionException) {
+            return null;
+        }
+
+        if (! $response->successful() || ! is_array($response->json('models'))) {
+            return null;
+        }
+
+        $climatology = [];
+
+        foreach ((array) $response->json('models') as $sku => $model) {
+            $months = is_array($model) ? ($model['months'] ?? null) : null;
+
+            if (! is_string($sku) || ! is_array($months) || array_diff(array_map('strval', range(1, 12)), array_map('strval', array_keys($months))) !== []) {
+                continue;
+            }
+
+            $climatology[$sku] = [
+                'source' => is_string($model['temperature_source'] ?? null) ? $model['temperature_source'] : 'monthly_mean',
+                'months' => array_map('floatval', array_intersect_key($months, array_flip(array_map('strval', range(1, 12))))),
+            ];
+        }
+
+        return $climatology;
+    }
+
     public function serviceUrl(): string
     {
         return rtrim((string) config('services.ml_forecast.url'), '/');
+    }
+
+    /**
+     * Every call to the ML service starts here, so the shared token (when configured) is always sent.
+     */
+    private function request(int $timeoutSeconds): PendingRequest
+    {
+        $request = Http::connectTimeout(1)->timeout($timeoutSeconds);
+        $token = trim((string) config('services.ml_forecast.token'));
+
+        return $token === '' ? $request : $request->withToken($token);
     }
 }

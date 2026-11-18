@@ -94,6 +94,23 @@ class ForecastingPageTest extends TestCase
         ]);
     }
 
+    public function test_only_administrators_see_the_ml_service_address(): void
+    {
+        $this->createSku('1L');
+        Http::fake(['ml-forecast.test/health' => Http::failedConnection()]);
+        $this->setForecastingAccess('inventory-staff', 'view');
+
+        $this->actingAs($this->userWithRole('inventory-staff'))
+            ->get(route('forecasting.index'))
+            ->assertOk()
+            ->assertSee('ML service unreachable')
+            ->assertDontSee('ml-forecast.test');
+
+        $this->actingAs($this->userWithRole('administrator'))
+            ->get(route('forecasting.index'))
+            ->assertSee('http://ml-forecast.test');
+    }
+
     public function test_cards_explain_exactly_why_a_forecast_is_unavailable(): void
     {
         $this->createSku('1L', missingCoveredOffsets: [1, 2]);

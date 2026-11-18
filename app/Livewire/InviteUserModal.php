@@ -20,6 +20,11 @@ use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class InviteUserModal extends Component
 {
+    /**
+     * How long an invitation or administrator-reset temporary password stays usable.
+     */
+    public const TEMPORARY_PASSWORD_LIFETIME_HOURS = 72;
+
     public bool $isOpen = false;
 
     public string $name = '';
@@ -95,6 +100,14 @@ class InviteUserModal extends Component
             'customPassword' => ['exclude_unless:passwordMode,custom', 'required', 'string', 'min:'.$passwordMinimumLength, 'max:255', 'confirmed'],
         ]);
 
+        $invitedRoleSlug = Role::query()->whereKey($validated['roleId'])->value('slug');
+
+        if ($invitedRoleSlug === 'administrator' && $user->role?->slug !== 'administrator') {
+            $this->addError('roleId', 'Only an Administrator can invite another Administrator.');
+
+            return;
+        }
+
         $temporaryPassword = $validated['passwordMode'] === 'custom'
             ? $validated['customPassword']
             : Str::random(16);
@@ -107,6 +120,9 @@ class InviteUserModal extends Component
                 'role_id' => $validated['roleId'],
                 'status' => $requiresPasswordChange ? 'pending' : 'active',
                 'must_change_password' => $requiresPasswordChange,
+                'temporary_password_expires_at' => $requiresPasswordChange
+                    ? now()->addHours(self::TEMPORARY_PASSWORD_LIFETIME_HOURS)
+                    : null,
             ]);
 
             AuditLog::create([

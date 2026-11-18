@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Models\DepartmentRequest;
 use App\Models\User;
+use App\Services\Maintenance\MaintenanceService;
 use App\Services\Requests\RequestAccess;
 use App\Services\Requests\RequestContext;
 use App\Services\Requests\RequestService;
@@ -70,6 +71,16 @@ class RequestDetail extends Component
         $requests->reopen($this->currentUser(), $this->departmentRequest());
     }
 
+    /**
+     * One click from a request about equipment to a corrective work order (safe to repeat).
+     */
+    public function createWorkOrder(MaintenanceService $maintenance)
+    {
+        $workOrder = $maintenance->createFromRequest($this->currentUser(), $this->departmentRequest());
+
+        return $this->redirectRoute('maintenance.work-orders.show', $workOrder);
+    }
+
     public function assignToMe(RequestService $requests): void
     {
         $requests->assignToSelf($this->currentUser(), $this->departmentRequest());
@@ -94,6 +105,9 @@ class RequestDetail extends Component
             'canComment' => $access->canComment($user, $request),
             'canCancel' => $access->canCancel($user, $request),
             'canReopen' => $access->canReopen($user, $request),
+            'canCreateWorkOrder' => $request->related_type === 'equipment'
+                && $access->canManage($user, $request)
+                && app(ModuleAccess::class)->can($user, 'maintenance', write: true),
             'canReviewAccess' => $request->type === RequestType::AccessRequest && app(ModuleAccess::class)->can($user, 'users-roles', write: true),
             'transitions' => $access->canManage($user, $request) ? $request->status->recipientTransitions() : [],
         ])->title($request->reference.' · Requests');

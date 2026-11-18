@@ -133,10 +133,12 @@ class DashboardWidgetsTest extends TestCase
         DepartmentRequest::factory()->create(['from_user_id' => $sender->id, 'to_role_id' => Role::query()->where('slug', 'inventory-staff')->value('id'), 'subject' => 'Count the 5L stock']);
         $this->actingAs($this->userWithRole('maintenance-staff'));
 
+        // Maintenance now has its own widgets, so the near-empty help panel no longer applies.
         Livewire::test(Dashboard::class)
             ->assertSee('My requests')
-            ->assertSee('Need something from another team?')
-            ->assertSee('Send a request');
+            ->assertSee('Maintenance due')
+            ->assertSee('Open work orders')
+            ->assertDontSee('Need something from another team?');
         Livewire::test(MyRequestsWidget::class)
             ->assertSee('Line 2 capper is jamming')
             ->assertDontSee('Count the 5L stock');
@@ -327,7 +329,10 @@ class DashboardWidgetsTest extends TestCase
             ->assertDontSee('Invite user');
 
         $this->actingAs($this->userWithRole('maintenance-staff'));
-        Livewire::test(Dashboard::class)->assertDontSeeHtml('aria-label="Quick actions"');
+        Livewire::test(Dashboard::class)
+            ->assertSee('Report a breakdown')
+            ->assertDontSee('Log production')
+            ->assertDontSee('Create order');
     }
 
     public function test_stock_count_quick_action_opens_the_form_only_for_inventory_writers(): void

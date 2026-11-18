@@ -254,6 +254,73 @@ class MLForecastClientTest extends TestCase
         $this->assertSame('The ML service is running an older version without a health check. Restart it to load the latest code.', $health['error']);
     }
 
+    public function test_every_call_sends_the_shared_token_when_one_is_configured(): void
+    {
+        config(['services.ml_forecast.token' => 'shared-secret']);
+        $target = CarbonImmutable::parse('2026-10-04');
+        $this->createSkuHistory('1L', $target);
+        $this->fakeEveryEndpoint();
+
+        $client = app(MLForecastClient::class);
+        $client->forecast('1L', $target->toDateString());
+        $client->health();
+        $client->climatology();
+
+        Http::assertSentCount(3);
+
+        foreach (['predict', 'health', 'climatology'] as $endpoint) {
+            Http::assertSent(fn (Request $request): bool => $request->url() === "http://ml-forecast.test/{$endpoint}"
+                && $request->hasHeader('Authorization', 'Bearer shared-secret'));
+        }
+    }
+
+    public function test_no_call_sends_an_authorization_header_when_no_token_is_configured(): void
+    {
+        config(['services.ml_forecast.token' => null]);
+        $target = CarbonImmutable::parse('2026-10-04');
+        $this->createSkuHistory('1L', $target);
+        $this->fakeEveryEndpoint();
+
+        $client = app(MLForecastClient::class);
+        $client->forecast('1L', $target->toDateString());
+        $client->health();
+        $client->climatology();
+
+        Http::assertSentCount(3);
+        Http::assertNotSent(fn (Request $request): bool => $request->hasHeader('Authorization'));
+    }
+
+    public function test_a_rejected_token_is_reported_as_unauthorized(): void
+    {
+        config(['services.ml_forecast.token' => 'stale-secret']);
+        $target = CarbonImmutable::parse('2026-10-04');
+        $this->createSkuHistory('1L', $target);
+        Http::fake(['ml-forecast.test/*' => Http::response(['detail' => 'Missing or invalid API token'], 401)]);
+
+        $client = app(MLForecastClient::class);
+        $outcome = $client->forecast('1L', $target->toDateString());
+        $health = $client->health();
+
+        $this->assertSame(ForecastStatus::Unauthorized, $outcome->status);
+        $this->assertSame(MLForecastClient::UNAUTHORIZED_MESSAGE, $outcome->message());
+        $this->assertSame(['reachable' => false, 'models' => [], 'error' => MLForecastClient::UNAUTHORIZED_MESSAGE], $health);
+        $this->assertNull($client->climatology());
+        $this->assertDatabaseCount('forecast_records', 0);
+    }
+
+    private function fakeEveryEndpoint(): void
+    {
+        Http::fake([
+            'ml-forecast.test/predict' => Http::response([
+                'predicted_units_sold' => 875.5,
+                'model_version' => '2026-10-01',
+                'rmse_score' => 12.3456,
+            ]),
+            'ml-forecast.test/health' => Http::response(['status' => 'ok', 'models' => ['1L' => '2026-10-01'], 'failed' => []]),
+            'ml-forecast.test/climatology' => Http::response(['models' => []]),
+        ]);
+    }
+
     private function createSkuHistory(string $sku, CarbonImmutable $target): void
     {
         $product = Product::create([

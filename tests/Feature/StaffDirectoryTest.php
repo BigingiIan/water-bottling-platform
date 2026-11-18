@@ -78,7 +78,7 @@ class StaffDirectoryTest extends TestCase
         Livewire::test(StaffDirectory::class)
             ->set('search', 'nobody-matches-this')
             ->set('statusFilter', 'suspended')
-            ->set('moduleFilter', 'equipment')
+            ->set('moduleFilter', 'maintenance')
             ->assertSee('No staff match these filters.')
             ->assertSee('Clear filters')
             ->assertDontSee($member->name)
@@ -158,7 +158,8 @@ class StaffDirectoryTest extends TestCase
 
     public function test_directory_filters_users_by_accessible_module(): void
     {
-        $productionManager = Role::query()->where('slug', 'production-manager')->firstOrFail();
+        // Inventory Staff have no maintenance access; Maintenance Staff have full.
+        $productionManager = Role::query()->where('slug', 'inventory-staff')->firstOrFail();
         $maintenanceStaff = Role::query()->where('slug', 'maintenance-staff')->firstOrFail();
 
         $manager = User::factory()->create([
@@ -171,7 +172,7 @@ class StaffDirectoryTest extends TestCase
         ]);
 
         Livewire::test(StaffDirectory::class)
-            ->set('moduleFilter', 'equipment')
+            ->set('moduleFilter', 'maintenance')
             ->assertSee($maintenance->email)
             ->assertDontSee($manager->email);
     }

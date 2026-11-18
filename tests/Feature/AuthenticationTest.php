@@ -33,7 +33,7 @@ class AuthenticationTest extends TestCase
             ->assertSee('Welcome back')
             ->assertSee('Access is managed by your AquaOps administrator.')
             ->assertDontSee('register', false)
-            ->assertDontSee('sidebar');
+            ->assertDontSee('id="main-sidebar"', false);
     }
 
     public function test_active_user_can_sign_in_and_is_redirected_to_dashboard(): void
