@@ -8,6 +8,7 @@ use App\Services\AppearanceService;
 use App\Services\SettingsService;
 use App\Services\UserPreferenceService;
 use App\Support\Appearance\Palette;
+use App\Support\Impersonation;
 use App\Support\ModuleAccess;
 use App\Support\Plural;
 use App\Support\UserAgentParser;
@@ -259,7 +260,7 @@ class ProfilePage extends Component
     public function render(UserPreferenceService $preferences): View
     {
         $user = $this->currentUser();
-        $isViewingAs = session()->has('impersonator_id');
+        $isViewingAs = Impersonation::active();
 
         return view('livewire.profile-page', [
             'user' => $user,
@@ -297,7 +298,7 @@ class ProfilePage extends Component
     {
         $user = $this->currentUser();
 
-        abort_if(session()->has('impersonator_id'), 403, 'Profiles are read-only while using View As.');
+        abort_if(Impersonation::active(), 403, 'Profiles are read-only while using View As.');
 
         return $user;
     }

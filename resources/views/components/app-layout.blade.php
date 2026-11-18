@@ -200,7 +200,7 @@
                             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                         },
                         body: JSON.stringify(payload),
-                    }).catch(() => {});
+                    }).catch(() => {}); // A refused save (403) is ignored; the choice then lasts for this page view only.
                 },
             });
         </script>
@@ -497,7 +497,7 @@
 
                                         @if ($isImpersonating)
                                             <div role="status" class="border-b border-warning/35 bg-warning-soft px-4 py-3 text-warning-ink">
-                                                <p class="text-xs font-semibold">Viewing as {{ $userName }}</p>
+                                                <p class="text-xs font-semibold">Viewing as {{ $userName }} (read-only)</p>
                                                 <form method="POST" action="{{ route('impersonation.destroy') }}" class="mt-1.5">
                                                     @csrf
                                                     <button type="submit" class="text-xs font-semibold text-warning-ink underline hover:no-underline">Return to my account</button>
@@ -578,6 +578,7 @@
                                 @else
                                     .
                                 @endif
+                                This view is read-only: changes cannot be saved.
                             </p>
                             <form method="POST" action="{{ route('impersonation.destroy') }}">
                                 @csrf
@@ -585,6 +586,23 @@
                                     Return to Admin
                                 </button>
                             </form>
+                        </div>
+                        <div
+                            x-data="{ shown: false, timer: null }"
+                            x-on:view-as-read-only.window="shown = true; clearTimeout(timer); timer = setTimeout(() => shown = false, 5000)"
+                            x-cloak
+                            class="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex justify-center sm:justify-end print:hidden"
+                        >
+                            <p
+                                x-show="shown"
+                                x-transition.opacity
+                                role="status"
+                                aria-live="polite"
+                                class="pointer-events-auto flex items-center gap-2 rounded-md border border-warning/35 bg-warning-soft px-4 py-2.5 text-sm font-medium text-warning-ink shadow-lg"
+                            >
+                                <x-heroicon-o-eye class="size-5 shrink-0" aria-hidden="true" />
+                                View As is read-only — changes were not saved.
+                            </p>
                         </div>
                     @endif
                 </header>

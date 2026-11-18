@@ -1,12 +1,19 @@
 @php
     $errorParts = explode(':', $exception->getMessage(), 2);
-    $variant = in_array($errorParts[0], ['no_access', 'read_only'], true) ? $errorParts[0] : 'no_access';
+    $variant = in_array($errorParts[0], ['no_access', 'read_only', 'view_as_read_only'], true) ? $errorParts[0] : 'no_access';
     $moduleName = $errorParts[1] ?? null;
     $moduleSlug = $moduleName === null ? null : \App\Models\Module::query()->where('name', trim($moduleName))->value('slug');
     $homeUrl = url('/');
     $actions = [
         ['label' => 'Back to Home', 'icon' => 'arrow-left', 'href' => $homeUrl, 'style' => 'primary'],
     ];
+
+    if ($variant === 'view_as_read_only') {
+        $moduleSlug = null;
+        $actions = [
+            ['label' => 'Return to my account', 'icon' => 'arrow-left', 'form' => route('impersonation.destroy'), 'fields' => [], 'style' => 'primary'],
+        ];
+    }
 
     if ($moduleSlug !== null && auth()->check()) {
         $actions[] = [
@@ -18,7 +25,12 @@
         ];
     }
 
-    if ($variant === 'read_only') {
+    if ($variant === 'view_as_read_only') {
+        $title = 'View As is read-only';
+        $icon = 'eye';
+        $description = 'Changes are disabled while you are viewing the app as another user. Return to your own account to make changes.';
+        $chip = 'View As';
+    } elseif ($variant === 'read_only') {
         $title = 'This action needs full access';
         $icon = 'pencil-square';
         $description = "You can view this module, but your role doesn't allow making changes here. Editing is restricted to roles with full access.";

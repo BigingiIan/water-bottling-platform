@@ -36,3 +36,8 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+# Deprecations inside third-party libraries, not in this project's code.
+filterwarnings = [
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+    "ignore:__array__ implementation doesn't accept a copy keyword:DeprecationWarning",
+]

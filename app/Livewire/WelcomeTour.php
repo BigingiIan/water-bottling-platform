@@ -5,6 +5,7 @@ namespace App\Livewire;
 use App\Models\User;
 use App\Services\Help\WelcomeTourSteps;
 use App\Services\UserPreferenceService;
+use App\Support\Impersonation;
 use Illuminate\Contracts\View\View;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -21,7 +22,7 @@ class WelcomeTour extends Component
     {
         $user = auth()->user();
 
-        if (! $user instanceof User || $user->must_change_password || session()->has('impersonator_id') || $preferences->hasSeenWelcomeTour($user)) {
+        if (! $user instanceof User || $user->must_change_password || Impersonation::active() || $preferences->hasSeenWelcomeTour($user)) {
             return;
         }
 

@@ -7,6 +7,7 @@ use App\Models\AuditLog;
 use App\Models\User;
 use App\Services\SettingsService;
 use App\Services\UserPreferenceService;
+use App\Support\Impersonation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -26,7 +27,7 @@ class PasswordSetController extends Controller
             return redirect()->to($preferences->landingUrl($user));
         }
 
-        $isViewingAs = $request->session()->has('impersonator_id');
+        $isViewingAs = Impersonation::active();
 
         if (! $isViewingAs && $user->temporary_password_expires_at?->isPast()) {
             return $this->rejectExpiredTemporaryPassword($request);
@@ -44,7 +45,7 @@ class PasswordSetController extends Controller
         $user = $request->user();
 
         abort_unless($user instanceof User, 403);
-        abort_if($request->session()->has('impersonator_id'), 403, 'Passwords cannot be set while using View As.');
+        abort_if(Impersonation::active(), 403, 'Passwords cannot be set while using View As.');
 
         if (! $user->must_change_password) {
             return redirect()->to($preferences->landingUrl($user));

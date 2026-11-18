@@ -1,6 +1,8 @@
 <?php
 
+use App\Exceptions\ViewAsReadOnlyException;
 use App\Http\Middleware\ApplyConfiguredSessionLifetime;
+use App\Http\Middleware\BlockWritesWhileImpersonating;
 use App\Http\Middleware\EnsureModuleAccess;
 use App\Http\Middleware\EnsurePasswordIsSet;
 use App\Http\Middleware\SecurityHeaders;
@@ -26,6 +28,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // middleware reads on each request; trustProxies(at:) cannot be used here as configuration is not loaded yet.
         $middleware->prependToGroup('web', ApplyConfiguredSessionLifetime::class);
         $middleware->prependToGroup('web', SecurityHeaders::class);
+        $middleware->appendToGroup('web', BlockWritesWhileImpersonating::class);
         $middleware->appendToGroup('web', UpdateLastActiveAt::class);
         $middleware->appendToGroup('web', EnsurePasswordIsSet::class);
     })
@@ -49,7 +52,7 @@ return Application::configure(basePath: dirname(__DIR__))
             return match ($response->getStatusCode()) {
                 403 => response()->view('errors.403', [
                     'exception' => $exception,
-                    'reference' => $recordReference(403),
+                    'reference' => $exception instanceof ViewAsReadOnlyException ? null : $recordReference(403),
                 ], 403),
                 404 => response()->view('errors.404', status: 404),
                 500 => response()->view('errors.500', [
